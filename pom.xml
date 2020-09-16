@@ -48,7 +48,7 @@
     </repositories>
 
     <properties>
-        <bnd.version>5.1.0</bnd.version>
+        <bnd.version>5.1.2</bnd.version>
         <dsl.version>1.2.2</dsl.version>
         <junit.version>5.6.2</junit.version>
         <mockito.version>3.5.10</mockito.version>
@@ -113,25 +113,7 @@
             <dependency>
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-api</artifactId>
-                <version>1.7.0</version>
-            </dependency>
-            <dependency>
-                <groupId>org.junit.jupiter</groupId>
-                <artifactId>junit-jupiter</artifactId>
-                <version>${junit.version}</version>
-                <scope>test</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.mockito</groupId>
-                <artifactId>mockito-core</artifactId>
-                <version>${mockito.version}</version>
-                <scope>test</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.mockito</groupId>
-                <artifactId>mockito-junit-jupiter</artifactId>
-                <version>${mockito.version}</version>
-                <scope>test</scope>
+                <version>1.7.30</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -139,6 +121,26 @@
     <build>
         <pluginManagement>
             <plugins>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>build-helper-maven-plugin</artifactId>
+                    <version>3.2.0</version>
+                    <executions>
+                        <execution>
+                            <id>regex-property</id>
+                            <goals>
+                                <goal>regex-property</goal>
+                            </goals>
+                            <configuration>
+                                <name>path.from.artifactId</name>
+                                <value>${project.artifactId}</value>
+                                <regex>\.</regex>
+                                <replacement>/</replacement>
+                                <failIfNoMatch>false</failIfNoMatch>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
@@ -157,6 +159,19 @@
                             <manifestFile>${project.build.outputDirectory}/META-INF/MANIFEST.MF</manifestFile>
                         </archive>
                     </configuration>
+                    <executions>
+                        <execution>
+                            <id>test-jar</id>
+                            <goals>
+                                <goal>test-jar</goal>
+                            </goals>
+                            <configuration>
+                                <archive>
+                                    <manifestFile>${project.build.testOutputDirectory}/META-INF/MANIFEST.MF</manifestFile>
+                                </archive>
+                            </configuration>
+                        </execution>
+                    </executions>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -172,6 +187,9 @@
                     <version>2.22.2</version>
                     <configuration>
                         <source>1.8</source>
+                        <excludes>
+                            <exclude>${path.from.artifactId}/osgi/**</exclude>
+                        </excludes>
                     </configuration>
                 </plugin>
                 <plugin>
@@ -185,19 +203,124 @@
                                 <goal>bnd-process</goal>
                             </goals>
                         </execution>
+                        <execution>
+                            <id>test-bnd-process</id>
+                            <goals>
+                                <goal>bnd-process-tests</goal>
+                            </goals>
+                            <configuration>
+                                <artifactFragment>true</artifactFragment>
+                                <testCases>useTestCasesHeader</testCases>
+                                <bnd><![CDATA[
+                                    Test-Cases:${select;${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.annotation.Testable;CONCRETE};${project.artifactId}.osgi.*}
+                                ]]></bnd>
+                            </configuration>
+                        </execution>
                     </executions>
+                </plugin>
+                <plugin>
+                    <groupId>biz.aQute.bnd</groupId>
+                    <artifactId>bnd-resolver-maven-plugin</artifactId>
+                    <version>${bnd.version}</version>
+                    <executions>
+                        <execution>
+                            <id>resolve-test</id>
+                            <phase>pre-integration-test</phase>
+                            <goals>
+                                <goal>resolve</goal>
+                            </goals>
+                            <configuration>
+                                <bndruns>
+                                    <bndrun>test.bndrun</bndrun>
+                                </bndruns>
+                                <bundles>
+                                    <bundle>${project.build.directory}/${project.build.finalName}-tests.jar</bundle>
+                                </bundles>
+                                <failOnChanges>false</failOnChanges>
+                                <includeDependencyManagement>true</includeDependencyManagement>
+                                <reportOptional>false</reportOptional>
+                                <scopes>
+                                    <scope>compile</scope>
+                                    <scope>runtime</scope>
+                                    <scope>test</scope>
+                                </scopes>
+                            </configuration>
+                        </execution>
+                        <execution>
+                            <id>resolve-run</id>
+                            <goals>
+                                <goal>resolve</goal>
+                            </goals>
+                            <configuration>
+                                <bndruns>
+                                    <bndrun>run.bndrun</bndrun>
+                                </bndruns>
+                                <failOnChanges>false</failOnChanges>
+                                <includeDependencyManagement>true</includeDependencyManagement>
+                                <reportOptional>false</reportOptional>
+                                <scopes>
+                                    <scope>compile</scope>
+                                    <scope>runtime</scope>
+                                    <scope>test</scope>
+                                </scopes>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>biz.aQute.bnd</groupId>
+                    <artifactId>bnd-testing-maven-plugin</artifactId>
+                    <version>${bnd.version}</version>
+                    <executions>
+                        <execution>
+                            <id>testing</id>
+                            <goals>
+                                <goal>testing</goal>
+                            </goals>
+                            <configuration>
+                                <bndruns>
+                                    <bndrun>test.bndrun</bndrun>
+                                </bndruns>
+                                <bundles>
+                                    <bundle>${project.build.directory}/${project.build.finalName}-tests.jar</bundle>
+                                </bundles>
+                                <failOnChanges>false</failOnChanges>
+                                <includeDependencyManagement>true</includeDependencyManagement>
+                                <resolve>false</resolve>
+                                <scopes>
+                                    <scope>compile</scope>
+                                    <scope>runtime</scope>
+                                    <scope>test</scope>
+                                </scopes>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>biz.aQute.bnd</groupId>
+                    <artifactId>bnd-run-maven-plugin</artifactId>
+                    <version>${bnd.version}</version>
+                    <configuration>
+                        <bndrun>run.bndrun</bndrun>
+                        <includeDependencyManagement>true</includeDependencyManagement>
+                        <scopes>
+                            <scope>compile</scope>
+                            <scope>runtime</scope>
+                            <scope>test</scope>
+                        </scopes>
+                    </configuration>
                 </plugin>
             </plugins>
         </pluginManagement>
-
         <plugins>
             <plugin>
-                <groupId>biz.aQute.bnd</groupId>
-                <artifactId>bnd-maven-plugin</artifactId>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
             </plugin>
         </plugins>
     </build>
     <modules>
+        <module>typedevent-test-bom</module>
         <module>org.apache.aries.typedevent.bus</module>
     </modules>
 </project>
