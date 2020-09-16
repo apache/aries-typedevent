@@ -19,7 +19,8 @@ package org.apache.aries.typedevent.bus.impl;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.quality.Strictness.LENIENT;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -29,12 +30,10 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatcher;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.MockitoAnnotations;
 import org.osgi.framework.Constants;
 import org.osgi.service.typedevent.TypedEventConstants;
 import org.osgi.service.typedevent.TypedEventHandler;
@@ -42,9 +41,11 @@ import org.osgi.service.typedevent.UnhandledEventHandler;
 import org.osgi.service.typedevent.UntypedEventHandler;
 import org.osgi.util.converter.Converters;
 
-@ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = LENIENT)
 public class TypedEventBusImplTest {
+
+    private static final String SPECIAL_TEST_EVENT_TOPIC = SpecialTestEvent.class.getName().replace(".", "/");
+
+    private static final String TEST_EVENT_TOPIC = TestEvent.class.getName().replace(".", "/");
 
     public static class TestEvent {
         public String message;
@@ -53,14 +54,18 @@ public class TypedEventBusImplTest {
     public static class TestEvent2 {
         public int count;
     }
+    
+    public static class SpecialTestEvent extends TestEvent {
+        
+    }
 
-    @Mock
+    @Mock(lenient = true)
     TypedEventHandler<Object> handlerA, handlerB;
 
-    @Mock
+    @Mock(lenient = true)
     UntypedEventHandler untypedHandlerA, untypedHandlerB;
 
-    @Mock
+    @Mock(lenient = true)
     UnhandledEventHandler unhandledHandler;
 
     Semaphore semA = new Semaphore(0), semB = new Semaphore(0), untypedSemA = new Semaphore(0),
@@ -69,9 +74,13 @@ public class TypedEventBusImplTest {
     TypedEventBusImpl impl;
     TypedEventMonitorImpl monitorImpl;
 
+    private AutoCloseable mocks;
+
     @BeforeEach
     public void start() {
 
+        mocks = MockitoAnnotations.openMocks(this);
+        
         Mockito.doAnswer(i -> {
             semA.release();
             return null;
@@ -104,9 +113,10 @@ public class TypedEventBusImplTest {
     }
 
     @AfterEach
-    public void stop() {
+    public void stop() throws Exception {
         impl.stop();
         monitorImpl.destroy();
+        mocks.close();
     }
 
     /**
@@ -122,7 +132,7 @@ public class TypedEventBusImplTest {
 
         Map<String, Object> serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TestEvent.class.getName().replace(".", "/"));
+        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
         serviceProperties.put(TypedEventConstants.TYPED_EVENT_TYPE, TestEvent.class.getName());
         serviceProperties.put(Constants.SERVICE_ID, 42L);
 
@@ -138,7 +148,7 @@ public class TypedEventBusImplTest {
 
         serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TestEvent.class.getName().replace(".", "/"));
+        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
         serviceProperties.put(Constants.SERVICE_ID, 44L);
 
         impl.addUntypedEventHandler(untypedHandlerA, serviceProperties);
@@ -166,6 +176,73 @@ public class TypedEventBusImplTest {
 
         assertFalse(untypedSemB.tryAcquire(1, TimeUnit.SECONDS));
 
+    }
+    
+    public static class TestEventHandler implements TypedEventHandler<TestEvent> {
+
+        @Override
+        public void notify(String topic, TestEvent event) {
+            // No op
+        }
+    }
+
+    public static interface TestEventHandlerIface extends TypedEventHandler<TestEvent> {
+        
+    }
+    
+    /**
+     * Tests that reified typedEventHandlers are properly processed
+     * 
+     * @throws InterruptedException
+     */
+    @Test
+    public void testGenericTypeInference() throws InterruptedException {
+        
+        TypedEventHandler<TestEvent> handler = Mockito.spy(TestEventHandler.class);
+        TypedEventHandler<TestEvent> handler2 = Mockito.spy(TestEventHandler.class);
+        TypedEventHandler<TestEvent> handler3 = Mockito.mock(TestEventHandlerIface.class);
+        
+        TestEvent event = new TestEvent();
+        event.message = "boo";
+        
+        Map<String, Object> serviceProperties = new HashMap<>();
+        serviceProperties.put(Constants.SERVICE_ID, 42L);
+        
+        impl.addTypedEventHandler(handler, serviceProperties);
+        
+        serviceProperties = new HashMap<>();
+        
+        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TYPE, SpecialTestEvent.class.getName());
+        serviceProperties.put(Constants.SERVICE_ID, 43L);
+        
+        impl.addTypedEventHandler(handler2, serviceProperties);
+
+        serviceProperties = new HashMap<>();
+        
+        serviceProperties.put(Constants.SERVICE_ID, 44L);
+        
+        impl.addTypedEventHandler(handler3, serviceProperties);
+        
+        impl.deliver(event);
+        
+        Mockito.verify(handler, Mockito.timeout(1000)).notify(eq(TEST_EVENT_TOPIC), argThat(isTestEventWithMessage("boo")));
+        Mockito.verify(handler3, Mockito.timeout(1000)).notify(eq(TEST_EVENT_TOPIC), argThat(isTestEventWithMessage("boo")));
+        
+        Mockito.verify(handler2, Mockito.after(1000).never()).notify(Mockito.anyString(), Mockito.any());
+
+        
+        event = new SpecialTestEvent();
+        event.message = "far";
+        impl.deliver(event);
+        
+        Mockito.verify(handler, Mockito.after(1000).never()).notify(eq(SPECIAL_TEST_EVENT_TOPIC), Mockito.any());
+        Mockito.verify(handler3, Mockito.after(1000).never()).notify(eq(SPECIAL_TEST_EVENT_TOPIC), Mockito.any());
+        
+        Mockito.verify(handler2, Mockito.timeout(1000)).notify(eq(SPECIAL_TEST_EVENT_TOPIC), 
+                argThat(isSpecialTestEventWithMessage("far")));
+        
+        
+        
     }
 
     /**
@@ -237,7 +314,7 @@ public class TypedEventBusImplTest {
 
         Map<String, Object> serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TestEvent.class.getName().replace(".", "/"));
+        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
         serviceProperties.put(TypedEventConstants.TYPED_EVENT_TYPE, TestEvent.class.getName());
         serviceProperties.put("event.filter", "(message=foo)");
         serviceProperties.put(Constants.SERVICE_ID, 42L);
@@ -246,7 +323,7 @@ public class TypedEventBusImplTest {
 
         serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TestEvent.class.getName().replace(".", "/"));
+        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
         serviceProperties.put(TypedEventConstants.TYPED_EVENT_TYPE, TestEvent.class.getName());
         serviceProperties.put("event.filter", "(message=bar)");
         serviceProperties.put(Constants.SERVICE_ID, 43L);
@@ -255,7 +332,7 @@ public class TypedEventBusImplTest {
 
         serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TestEvent.class.getName().replace(".", "/"));
+        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
         serviceProperties.put("event.filter", "(message=foo)");
         serviceProperties.put(Constants.SERVICE_ID, 44L);
 
@@ -263,7 +340,7 @@ public class TypedEventBusImplTest {
 
         serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TestEvent.class.getName().replace(".", "/"));
+        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
         serviceProperties.put("event.filter", "(message=bar)");
         serviceProperties.put(Constants.SERVICE_ID, 45L);
 
@@ -318,7 +395,7 @@ public class TypedEventBusImplTest {
 
         Map<String, Object> serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TestEvent.class.getName().replace(".", "/"));
+        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
         serviceProperties.put(TypedEventConstants.TYPED_EVENT_TYPE, TestEvent.class.getName());
         serviceProperties.put("event.filter", "");
         serviceProperties.put(Constants.SERVICE_ID, 42L);
@@ -343,7 +420,7 @@ public class TypedEventBusImplTest {
 
         Map<String, Object> serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TestEvent.class.getName().replace(".", "/"));
+        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
         serviceProperties.put(TypedEventConstants.TYPED_EVENT_TYPE, TestEvent.class.getName());
         serviceProperties.put("event.filter", "(message=foo)");
         serviceProperties.put(Constants.SERVICE_ID, 42L);
@@ -382,12 +459,22 @@ public class TypedEventBusImplTest {
 
     }
 
-    ArgumentMatcher<Object> isTestEventWithMessage(String message) {
-        return new ArgumentMatcher<Object>() {
+    ArgumentMatcher<TestEvent> isTestEventWithMessage(String message) {
+        return new ArgumentMatcher<TestEvent>() {
 
             @Override
-            public boolean matches(Object argument) {
+            public boolean matches(TestEvent argument) {
                 return argument instanceof TestEvent && message.equals(((TestEvent) argument).message);
+            }
+        };
+    }
+    
+    ArgumentMatcher<SpecialTestEvent> isSpecialTestEventWithMessage(String message) {
+        return new ArgumentMatcher<SpecialTestEvent>() {
+            
+            @Override
+            public boolean matches(SpecialTestEvent argument) {
+                return argument instanceof SpecialTestEvent && message.equals(((SpecialTestEvent) argument).message);
             }
         };
     }

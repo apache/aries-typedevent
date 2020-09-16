@@ -18,28 +18,36 @@
 package org.apache.aries.typedevent.bus.impl;
 
 import static java.util.function.Function.identity;
+import static org.apache.aries.component.dsl.OSGi.all;
+import static org.apache.aries.component.dsl.OSGi.coalesce;
+import static org.apache.aries.component.dsl.OSGi.configuration;
+import static org.apache.aries.component.dsl.OSGi.nothing;
+import static org.apache.aries.component.dsl.OSGi.just;
+import static org.apache.aries.component.dsl.OSGi.register;
+import static org.apache.aries.component.dsl.OSGi.service;
+import static org.apache.aries.component.dsl.OSGi.serviceReferences;
 
 import java.util.Arrays;
 import java.util.Dictionary;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
 
+import org.apache.aries.component.dsl.OSGi;
+import org.apache.aries.component.dsl.OSGiResult;
 import org.osgi.annotation.bundle.Header;
 import org.osgi.framework.BundleActivator;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.Constants;
 import org.osgi.framework.ServiceReference;
-import org.osgi.framework.ServiceRegistration;
 import org.osgi.service.typedevent.TypedEventBus;
 import org.osgi.service.typedevent.TypedEventHandler;
 import org.osgi.service.typedevent.UnhandledEventHandler;
 import org.osgi.service.typedevent.UntypedEventHandler;
 import org.osgi.service.typedevent.monitor.TypedEventMonitor;
-import org.osgi.util.tracker.ServiceTracker;
-import org.osgi.util.tracker.ServiceTrackerCustomizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,15 +56,7 @@ public class TypedEventBusActivator implements BundleActivator {
 
     private static final Logger _log = LoggerFactory.getLogger(TypedEventBusActivator.class);
 
-    private TypedEventMonitorImpl monitorImpl;
-    private ServiceRegistration<TypedEventMonitor> monitorReg;
-
-    private TypedEventBusImpl busImpl;
-    private ServiceRegistration<TypedEventBus> busReg;
-
-    private ServiceTracker<TypedEventHandler<?>, TypedEventHandler<?>> typedTracker;
-    private ServiceTracker<UntypedEventHandler, UntypedEventHandler> untypedTracker;
-    private ServiceTracker<UnhandledEventHandler, UnhandledEventHandler> unhandledTracker;
+    OSGiResult eventBus;
 
     @Override
     public void start(BundleContext bundleContext) throws Exception {
@@ -64,120 +64,79 @@ public class TypedEventBusActivator implements BundleActivator {
             _log.debug("Aries Typed Event Bus Starting");
         }
 
-        // TODO use Config Admin
-
-        Map<String, Object> map = new HashMap<String, Object>();
-
-        createEventBus(bundleContext, map);
+        eventBus = coalesce(
+                    configuration("org.apache.aries.typedevent.bus"),
+                    just(Hashtable::new)
+                )
+                .map(this::toConfigProps)
+                .flatMap(configuration -> createProgram(configuration))
+                .run(bundleContext);
 
         if (_log.isDebugEnabled()) {
             _log.debug("Aries Typed Event Bus Started");
         }
     }
 
-    private void createEventBus(BundleContext bundleContext, Map<String, ?> configuration) throws Exception {
+    private OSGi<?> createProgram(Map<String, ?> configuration) {
 
-        Dictionary<String, Object> serviceProps = toServiceProps(configuration);
+        Map<String, Object> serviceProps = toServiceProps(configuration);
 
-        monitorImpl = new TypedEventMonitorImpl(configuration);
-        busImpl = new TypedEventBusImpl(monitorImpl, configuration);
+        return just(configuration)
+                .map(TypedEventMonitorImpl::new)
+                .effects(x -> { }, TypedEventMonitorImpl::destroy)
+                .flatMap(
+                        temi -> register(TypedEventMonitor.class, temi, serviceProps)
+                                .then(just(new TypedEventBusImpl(temi, configuration))
+                                .effects(TypedEventBusImpl::start, TypedEventBusImpl::stop)))
+                .flatMap(
+                        tebi -> all(
+                                serviceReferences(TypedEventHandler.class, 
+                                        csr -> {
+                                            tebi.updatedTypedEventHandler(
+                                                    getServiceProps(csr.getServiceReference()));
+                                            return false;
+                                        })
+                                        .flatMap(csr -> service(csr)
+                                                .effects(
+                                                         handler -> tebi.addTypedEventHandler(handler,
+                                                                    getServiceProps(csr.getServiceReference())),
+                                                         handler -> tebi.removeTypedEventHandler(handler,
+                                                                    getServiceProps(csr.getServiceReference())))),
+                                serviceReferences(UntypedEventHandler.class, 
+                                        csr -> {
+                                            tebi.updatedTypedEventHandler(
+                                                    getServiceProps(csr.getServiceReference()));
+                                            return false;
+                                        })
+                                        .flatMap(csr -> service(csr)
+                                                .effects(
+                                                         handler -> tebi.addUntypedEventHandler(handler,
+                                                                    getServiceProps(csr.getServiceReference())),
+                                                         handler -> tebi.removeUntypedEventHandler(handler,
+                                                                    getServiceProps(csr.getServiceReference())))),
+                                serviceReferences(UnhandledEventHandler.class)
+                                        .flatMap(csr -> service(csr)
+                                                .effects(handler -> tebi.addUnhandledEventHandler(handler,
+                                                                    getServiceProps(csr.getServiceReference())),
+                                                         handler -> tebi.removeUnhandledEventHandler(handler,
+                                                                    getServiceProps(csr.getServiceReference())))),
+                                register(TypedEventBus.class, tebi, serviceProps)
+                                        .flatMap(x -> nothing())));
 
-        untypedTracker = new ServiceTracker<>(bundleContext, UntypedEventHandler.class,
-                new ServiceTrackerCustomizer<UntypedEventHandler, UntypedEventHandler>() {
-
-                    @Override
-                    public UntypedEventHandler addingService(ServiceReference<UntypedEventHandler> reference) {
-                        UntypedEventHandler service = bundleContext.getService(reference);
-                        busImpl.addUntypedEventHandler(service, getServiceProps(reference));
-                        return service;
-                    }
-
-                    @Override
-                    public void modifiedService(ServiceReference<UntypedEventHandler> reference,
-                            UntypedEventHandler service) {
-                        busImpl.updatedUntypedEventHandler(service, getServiceProps(reference));
-                    }
-
-                    @Override
-                    public void removedService(ServiceReference<UntypedEventHandler> reference,
-                            UntypedEventHandler service) {
-                        busImpl.removeUntypedEventHandler(service, getServiceProps(reference));
-                    }
-                });
-
-        untypedTracker = new ServiceTracker<>(bundleContext, UntypedEventHandler.class,
-                new ServiceTrackerCustomizer<UntypedEventHandler, UntypedEventHandler>() {
-
-                    @Override
-                    public UntypedEventHandler addingService(ServiceReference<UntypedEventHandler> reference) {
-                        UntypedEventHandler service = bundleContext.getService(reference);
-                        busImpl.addUntypedEventHandler(service, getServiceProps(reference));
-                        return service;
-                    }
-
-                    @Override
-                    public void modifiedService(ServiceReference<UntypedEventHandler> reference,
-                            UntypedEventHandler service) {
-                        busImpl.updatedUntypedEventHandler(service, getServiceProps(reference));
-                    }
-
-                    @Override
-                    public void removedService(ServiceReference<UntypedEventHandler> reference,
-                            UntypedEventHandler service) {
-                        busImpl.removeUntypedEventHandler(service, getServiceProps(reference));
-                    }
-                });
-
-        unhandledTracker = new ServiceTracker<>(bundleContext, UnhandledEventHandler.class,
-                new ServiceTrackerCustomizer<UnhandledEventHandler, UnhandledEventHandler>() {
-
-                    @Override
-                    public UnhandledEventHandler addingService(ServiceReference<UnhandledEventHandler> reference) {
-                        UnhandledEventHandler service = bundleContext.getService(reference);
-                        busImpl.addUnhandledEventHandler(service, getServiceProps(reference));
-                        return service;
-                    }
-
-                    @Override
-                    public void modifiedService(ServiceReference<UnhandledEventHandler> reference,
-                            UnhandledEventHandler service) {
-                    }
-
-                    @Override
-                    public void removedService(ServiceReference<UnhandledEventHandler> reference,
-                            UnhandledEventHandler service) {
-                        busImpl.removeUnhandledEventHandler(service, getServiceProps(reference));
-                    }
-                });
-
-        try {
-            busImpl.start();
-
-            monitorReg = bundleContext.registerService(TypedEventMonitor.class, monitorImpl, serviceProps);
-
-            typedTracker.open();
-            untypedTracker.open();
-            unhandledTracker.open();
-
-            busReg = bundleContext.registerService(TypedEventBus.class, busImpl, serviceProps);
-
-        } catch (Exception e) {
-            stop(bundleContext);
-        }
 
     }
 
-    private void safeUnregister(ServiceRegistration<?> reg) {
-        try {
-            reg.unregister();
-        } catch (IllegalStateException ise) {
-            // no op
-            // TODO LOG this
+    private Map<String, Object> toConfigProps(Dictionary<String, ?> config) {
+        Enumeration<String> keys = config.keys();
+        Map<String, Object> map = new HashMap<>();
+         while(keys.hasMoreElements()) {
+            String key = keys.nextElement();
+            map.put(key, config.get(key));
         }
-
+        return map;
     }
-
-    private Dictionary<String, Object> toServiceProps(Map<String, ?> config) {
+    
+    private Map<String, Object> toServiceProps(Map<String, ?> config) {
         return config.entrySet().stream().filter(e -> e.getKey() != null && e.getKey().startsWith("."))
                 .collect(Collectors.toMap(Entry::getKey, Entry::getValue, (a, b) -> {
                     throw new IllegalArgumentException("Duplicate key ");
@@ -194,30 +153,7 @@ public class TypedEventBusActivator implements BundleActivator {
             _log.debug("Aries Typed Event Bus Stopping");
         }
 
-        // Order matters here
-        if (busReg != null) {
-            safeUnregister(busReg);
-        }
-
-        if (busImpl != null) {
-            busImpl.stop();
-        }
-
-        if (typedTracker != null) {
-            typedTracker.close();
-        }
-        if (untypedTracker != null) {
-            untypedTracker.close();
-        }
-        if (unhandledTracker != null) {
-            unhandledTracker.close();
-        }
-
-        if (monitorReg != null) {
-            safeUnregister(monitorReg);
-        }
-
-        monitorImpl.destroy();
+        eventBus.close();
 
         if (_log.isDebugEnabled()) {
             _log.debug("Aries Typed Event Bus Stopped");
