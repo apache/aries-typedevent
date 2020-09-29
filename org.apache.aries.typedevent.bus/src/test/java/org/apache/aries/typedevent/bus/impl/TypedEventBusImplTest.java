@@ -246,7 +246,7 @@ public class TypedEventBusImplTest {
     }
 
     /**
-     * Tests that events are delivered to Smart Behaviours based on type
+     * Tests that events are delivered to Event Handlers based on type
      * 
      * @throws InterruptedException
      */
