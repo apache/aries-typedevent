@@ -21,6 +21,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.osgi.framework.Constants.SERVICE_ID;
+import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_FILTER;
+import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_TOPICS;
+import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_TYPE;
+import static org.osgi.util.converter.Converters.standardConverter;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -35,11 +40,9 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.osgi.framework.Constants;
-import org.osgi.service.typedevent.TypedEventConstants;
 import org.osgi.service.typedevent.TypedEventHandler;
 import org.osgi.service.typedevent.UnhandledEventHandler;
 import org.osgi.service.typedevent.UntypedEventHandler;
-import org.osgi.util.converter.Converters;
 
 public class TypedEventBusImplTest {
 
@@ -132,31 +135,31 @@ public class TypedEventBusImplTest {
 
         Map<String, Object> serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TYPE, TestEvent.class.getName());
-        serviceProperties.put(Constants.SERVICE_ID, 42L);
+        serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+        serviceProperties.put(TYPED_EVENT_TYPE, TestEvent.class.getName());
+        serviceProperties.put(SERVICE_ID, 42L);
 
         impl.addTypedEventHandler(handlerA, serviceProperties);
 
         serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TestEvent2.class.getName().replace(".", "/"));
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TYPE, TestEvent2.class.getName());
-        serviceProperties.put(Constants.SERVICE_ID, 43L);
+        serviceProperties.put(TYPED_EVENT_TOPICS, TestEvent2.class.getName().replace(".", "/"));
+        serviceProperties.put(TYPED_EVENT_TYPE, TestEvent2.class.getName());
+        serviceProperties.put(SERVICE_ID, 43L);
 
         impl.addTypedEventHandler(handlerB, serviceProperties);
 
         serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
-        serviceProperties.put(Constants.SERVICE_ID, 44L);
+        serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+        serviceProperties.put(SERVICE_ID, 44L);
 
         impl.addUntypedEventHandler(untypedHandlerA, serviceProperties);
 
         serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TestEvent2.class.getName().replace(".", "/"));
-        serviceProperties.put(Constants.SERVICE_ID, 45L);
+        serviceProperties.put(TYPED_EVENT_TOPICS, TestEvent2.class.getName().replace(".", "/"));
+        serviceProperties.put(SERVICE_ID, 45L);
 
         impl.addUntypedEventHandler(untypedHandlerB, serviceProperties);
 
@@ -206,20 +209,20 @@ public class TypedEventBusImplTest {
         event.message = "boo";
         
         Map<String, Object> serviceProperties = new HashMap<>();
-        serviceProperties.put(Constants.SERVICE_ID, 42L);
+        serviceProperties.put(SERVICE_ID, 42L);
         
         impl.addTypedEventHandler(handler, serviceProperties);
         
         serviceProperties = new HashMap<>();
         
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TYPE, SpecialTestEvent.class.getName());
-        serviceProperties.put(Constants.SERVICE_ID, 43L);
+        serviceProperties.put(TYPED_EVENT_TYPE, SpecialTestEvent.class.getName());
+        serviceProperties.put(SERVICE_ID, 43L);
         
         impl.addTypedEventHandler(handler2, serviceProperties);
 
         serviceProperties = new HashMap<>();
         
-        serviceProperties.put(Constants.SERVICE_ID, 44L);
+        serviceProperties.put(SERVICE_ID, 44L);
         
         impl.addTypedEventHandler(handler3, serviceProperties);
         
@@ -258,35 +261,35 @@ public class TypedEventBusImplTest {
 
         Map<String, Object> serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TestEvent.class.getName());
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TYPE, TestEvent.class.getName());
-        serviceProperties.put(Constants.SERVICE_ID, 42L);
+        serviceProperties.put(TYPED_EVENT_TOPICS, TestEvent.class.getName());
+        serviceProperties.put(TYPED_EVENT_TYPE, TestEvent.class.getName());
+        serviceProperties.put(SERVICE_ID, 42L);
 
         impl.addTypedEventHandler(handlerA, serviceProperties);
 
         serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TestEvent2.class.getName());
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TYPE, TestEvent2.class.getName());
-        serviceProperties.put(Constants.SERVICE_ID, 43L);
+        serviceProperties.put(TYPED_EVENT_TOPICS, TestEvent2.class.getName());
+        serviceProperties.put(TYPED_EVENT_TYPE, TestEvent2.class.getName());
+        serviceProperties.put(SERVICE_ID, 43L);
 
         impl.addTypedEventHandler(handlerB, serviceProperties);
 
         serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TestEvent.class.getName());
-        serviceProperties.put(Constants.SERVICE_ID, 44L);
+        serviceProperties.put(TYPED_EVENT_TOPICS, TestEvent.class.getName());
+        serviceProperties.put(SERVICE_ID, 44L);
 
         impl.addUntypedEventHandler(untypedHandlerA, serviceProperties);
 
         serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TestEvent2.class.getName());
-        serviceProperties.put(Constants.SERVICE_ID, 45L);
+        serviceProperties.put(TYPED_EVENT_TOPICS, TestEvent2.class.getName());
+        serviceProperties.put(SERVICE_ID, 45L);
 
         impl.addUntypedEventHandler(untypedHandlerB, serviceProperties);
 
-        impl.deliver(event.getClass().getName(), Converters.standardConverter().convert(event).to(Map.class));
+        impl.deliver(event.getClass().getName(), standardConverter().convert(event).to(Map.class));
 
         assertTrue(semA.tryAcquire(1, TimeUnit.SECONDS));
 
@@ -314,35 +317,35 @@ public class TypedEventBusImplTest {
 
         Map<String, Object> serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TYPE, TestEvent.class.getName());
-        serviceProperties.put("event.filter", "(message=foo)");
-        serviceProperties.put(Constants.SERVICE_ID, 42L);
+        serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+        serviceProperties.put(TYPED_EVENT_TYPE, TestEvent.class.getName());
+        serviceProperties.put(TYPED_EVENT_FILTER, "(message=foo)");
+        serviceProperties.put(SERVICE_ID, 42L);
 
         impl.addTypedEventHandler(handlerA, serviceProperties);
 
         serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TYPE, TestEvent.class.getName());
-        serviceProperties.put("event.filter", "(message=bar)");
-        serviceProperties.put(Constants.SERVICE_ID, 43L);
+        serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+        serviceProperties.put(TYPED_EVENT_TYPE, TestEvent.class.getName());
+        serviceProperties.put(TYPED_EVENT_FILTER, "(message=bar)");
+        serviceProperties.put(SERVICE_ID, 43L);
 
         impl.addTypedEventHandler(handlerB, serviceProperties);
 
         serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
-        serviceProperties.put("event.filter", "(message=foo)");
-        serviceProperties.put(Constants.SERVICE_ID, 44L);
+        serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+        serviceProperties.put(TYPED_EVENT_FILTER, "(message=foo)");
+        serviceProperties.put(SERVICE_ID, 44L);
 
         impl.addUntypedEventHandler(untypedHandlerA, serviceProperties);
 
         serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
-        serviceProperties.put("event.filter", "(message=bar)");
-        serviceProperties.put(Constants.SERVICE_ID, 45L);
+        serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+        serviceProperties.put(TYPED_EVENT_FILTER, "(message=bar)");
+        serviceProperties.put(SERVICE_ID, 45L);
 
         impl.addUntypedEventHandler(untypedHandlerB, serviceProperties);
 
@@ -395,10 +398,10 @@ public class TypedEventBusImplTest {
 
         Map<String, Object> serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TYPE, TestEvent.class.getName());
-        serviceProperties.put("event.filter", "");
-        serviceProperties.put(Constants.SERVICE_ID, 42L);
+        serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+        serviceProperties.put(TYPED_EVENT_TYPE, TestEvent.class.getName());
+        serviceProperties.put(TYPED_EVENT_FILTER, "");
+        serviceProperties.put(SERVICE_ID, 42L);
 
         impl.addTypedEventHandler(handlerA, serviceProperties);
 
@@ -420,10 +423,10 @@ public class TypedEventBusImplTest {
 
         Map<String, Object> serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
-        serviceProperties.put(TypedEventConstants.TYPED_EVENT_TYPE, TestEvent.class.getName());
-        serviceProperties.put("event.filter", "(message=foo)");
-        serviceProperties.put(Constants.SERVICE_ID, 42L);
+        serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+        serviceProperties.put(TYPED_EVENT_TYPE, TestEvent.class.getName());
+        serviceProperties.put(TYPED_EVENT_FILTER, "(message=foo)");
+        serviceProperties.put(SERVICE_ID, 42L);
 
         impl.addTypedEventHandler(handlerA, serviceProperties);
 

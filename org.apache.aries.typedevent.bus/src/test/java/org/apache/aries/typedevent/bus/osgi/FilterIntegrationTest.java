@@ -16,6 +16,8 @@
  */
 package org.apache.aries.typedevent.bus.osgi;
 
+import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_FILTER;
+
 import java.util.Dictionary;
 import java.util.Hashtable;
 
@@ -71,12 +73,12 @@ public class FilterIntegrationTest extends AbstractIntegrationTest {
     @Test
     public void testFilteredListener() throws Exception {
         Dictionary<String, Object> props = new Hashtable<>();
-        props.put("event.filter", "(message=foo)");
+        props.put(TYPED_EVENT_FILTER, "(message=foo)");
         
         regs.add(context.registerService(TypedEventHandler.class, typedEventHandler, props));
         
         props = new Hashtable<>();
-        props.put("event.filter", "(message=bar)");
+        props.put(TYPED_EVENT_FILTER, "(message=bar)");
         
         regs.add(context.registerService(TypedEventHandler.class, typedEventHandlerB, props));
         
@@ -107,7 +109,7 @@ public class FilterIntegrationTest extends AbstractIntegrationTest {
     @Test
     public void testFilteredListenerEmptyString() throws Exception {
         Dictionary<String, Object> props = new Hashtable<>();
-        props.put("event.filter", "");
+        props.put(TYPED_EVENT_FILTER, "");
         
         
         regs.add(context.registerService(TypedEventHandler.class, typedEventHandler, props));

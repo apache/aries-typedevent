@@ -24,6 +24,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
+import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_FILTER;
 
 import java.util.Dictionary;
 import java.util.Hashtable;
@@ -128,7 +129,7 @@ public class UnhandledEventHandlerIntegrationTest extends AbstractIntegrationTes
     public void testUnhandledDueToFilter() throws InterruptedException {
         
         Dictionary<String, Object> props = new Hashtable<>();
-        props.put("event.filter", "(message=foo)");
+        props.put(TYPED_EVENT_FILTER, "(message=foo)");
         
         regs.add(context.registerService(TypedEventHandler.class, typedEventHandler, props));
         
