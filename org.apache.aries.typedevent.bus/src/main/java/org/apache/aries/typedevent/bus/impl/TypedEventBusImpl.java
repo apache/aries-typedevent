@@ -19,6 +19,11 @@ package org.apache.aries.typedevent.bus.impl;
 
 import static java.util.Collections.emptyMap;
 import static java.util.stream.Collectors.toList;
+import static org.osgi.namespace.implementation.ImplementationNamespace.IMPLEMENTATION_NAMESPACE;
+import static org.osgi.namespace.service.ServiceNamespace.SERVICE_NAMESPACE;
+import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_FILTER;
+import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_IMPLEMENTATION;
+import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_SPECIFICATION_VERSION;
 import static org.osgi.util.converter.Converters.standardConverter;
 
 import java.lang.reflect.ParameterizedType;
@@ -34,6 +39,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 
+import org.osgi.annotation.bundle.Capability;
 import org.osgi.framework.Constants;
 import org.osgi.framework.Filter;
 import org.osgi.framework.FrameworkUtil;
@@ -45,6 +51,8 @@ import org.osgi.service.typedevent.UnhandledEventHandler;
 import org.osgi.service.typedevent.UntypedEventHandler;
 import org.osgi.util.converter.TypeReference;
 
+@Capability(namespace=SERVICE_NAMESPACE, attribute="objectClass:List<String>=org.osgi.service.typedevent.TypedEventBus", uses=TypedEventBus.class)
+@Capability(namespace=IMPLEMENTATION_NAMESPACE, name=TYPED_EVENT_IMPLEMENTATION, version=TYPED_EVENT_SPECIFICATION_VERSION)
 public class TypedEventBusImpl implements TypedEventBus {
 
     private static final TypeReference<List<String>> LIST_OF_STRINGS = new TypeReference<List<String>>() {
@@ -248,7 +256,7 @@ public class TypedEventBusImpl implements TypedEventBus {
     }
 
     private Filter getFilter(Long serviceId, Map<String, Object> properties) throws IllegalArgumentException {
-        String key = "event.filter";
+        String key = TYPED_EVENT_FILTER;
         return getFilter(serviceId, key, properties.get(key));
     }
 

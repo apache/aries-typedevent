@@ -45,6 +45,18 @@
                 <enabled>false</enabled>
             </releases>
         </repository>
+        <repository>
+            <id>Sonatype-snapshots</id>
+            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+            <snapshots>
+                <enabled>true</enabled>
+                <updatePolicy>daily</updatePolicy>
+                <checksumPolicy>ignore</checksumPolicy>
+            </snapshots>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+        </repository>
     </repositories>
 
     <properties>
@@ -322,5 +334,6 @@
     <modules>
         <module>typedevent-test-bom</module>
         <module>org.apache.aries.typedevent.bus</module>
+        <module>org.apache.aries.typedevent.remote</module>
     </modules>
 </project>

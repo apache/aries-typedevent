@@ -1,0 +1,56 @@
+#    Licensed to the Apache Software Foundation (ASF) under one
+#    or more contributor license agreements.  See the NOTICE file
+#    distributed with this work for additional information
+#    regarding copyright ownership.  The ASF licenses this file
+#    to you under the Apache License, Version 2.0 (the
+#    "License"); you may not use this file except in compliance
+#    with the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing,
+#    software distributed under the License is distributed on an
+#    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+#    KIND, either express or implied.  See the License for the
+#    specific language governing permissions and limitations
+#    under the License.
+
+-tester: biz.aQute.tester.junit-platform
+
+-runfw: org.apache.felix.framework
+
+-runrequires: bnd.identity;id="org.apache.aries.typedevent.remote.remoteservices-tests",\
+  bnd.identity;id="junit-jupiter-engine",\
+  bnd.identity;id="junit-platform-launcher"
+ 
+-runsystempackages: sun.reflect
+
+-resolve.effective: active
+-runbundles: \
+    ch.qos.logback.classic;version='[1.2.3,1.2.4)',\
+    ch.qos.logback.core;version='[1.2.3,1.2.4)',\
+    org.apache.aries.component-dsl.component-dsl;version='[1.2.2,1.2.3)',\
+    org.apache.felix.configadmin;version='[1.9.18,1.9.19)',\
+    org.apache.felix.converter;version='[1.0.14,1.0.15)',\
+    org.osgi.service.typedevent;version='[1.0.0,1.0.1)',\
+    org.osgi.util.function;version='[1.1.0,1.1.1)',\
+    org.osgi.util.promise;version='[1.1.1,1.1.2)',\
+    org.osgi.util.pushstream;version='[1.0.1,1.0.2)',\
+    slf4j.api;version='[1.7.30,1.7.31)',\
+    junit-jupiter-api;version='[5.6.2,5.6.3)',\
+    junit-platform-commons;version='[1.6.2,1.6.3)',\
+    net.bytebuddy.byte-buddy;version='[1.10.13,1.10.14)',\
+    net.bytebuddy.byte-buddy-agent;version='[1.10.13,1.10.14)',\
+    org.mockito.mockito-core;version='[3.5.10,3.5.11)',\
+    org.objenesis;version='[3.1.0,3.1.1)',\
+    org.opentest4j;version='[1.2.0,1.2.1)',\
+    org.osgi.test.common;version='[0.9.0,0.9.1)',\
+    org.osgi.test.junit5;version='[0.9.0,0.9.1)',\
+    junit-platform-engine;version='[1.6.2,1.6.3)',\
+    junit-platform-launcher;version='[1.6.2,1.6.3)',\
+    junit-jupiter-engine;version='[5.6.2,5.6.3)',\
+    org.apache.aries.typedevent.remote.api;version='[0.0.1,0.0.2)',\
+    org.apache.aries.typedevent.remote.remoteservices;version='[0.0.1,0.0.2)',\
+    org.apache.aries.typedevent.remote.remoteservices-tests;version='[0.0.1,0.0.2)',\
+    org.apache.aries.typedevent.remote.spi;version='[0.0.1,0.0.2)',\
+    org.apache.aries.typedevent.bus;version='[0.0.1,0.0.2)'
