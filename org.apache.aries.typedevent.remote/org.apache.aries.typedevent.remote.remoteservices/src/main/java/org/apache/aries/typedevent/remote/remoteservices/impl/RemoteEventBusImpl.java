@@ -19,13 +19,16 @@ package org.apache.aries.typedevent.remote.remoteservices.impl;
 import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
+import static org.apache.aries.typedevent.remote.api.RemoteEventConstants.RECEIVE_REMOTE_EVENTS;
 import static org.osgi.namespace.service.ServiceNamespace.SERVICE_NAMESPACE;
+import static org.osgi.util.converter.Converters.standardConverter;
 
 import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import org.apache.aries.typedevent.remote.api.RemoteEventConstants;
@@ -57,9 +60,16 @@ public class RemoteEventBusImpl implements RemoteEventBus {
     private final Map<Long, Map<String, Filter>> servicesToInterests = new HashMap<>();
     
     private final Object lock = new Object();
-
-    public RemoteEventBusImpl(TypedEventBus eventBus) {
+    
+    private final Config configuration;
+    
+    public RemoteEventBusImpl(TypedEventBus eventBus, Map<String, ?> config) {
         this.eventBus = eventBus;
+
+        Map<String, Object> configWithDefaults = new HashMap<String, Object>(config);
+        configWithDefaults.putIfAbsent("listener.selection", Config.Selector.WITH_PROPERTY);
+        
+        this.configuration = standardConverter().convert(configWithDefaults).to(Config.class);
     }
     
     public void init(BundleContext ctx) {
@@ -119,18 +129,53 @@ public class RemoteEventBusImpl implements RemoteEventBus {
      * @param topics
      * @param filter
      */
-    void updateLocalInterest(Long id, List<String> topics, Filter filter) {
+    void updateLocalInterest(Long id, List<String> topics, Filter filter, Map<String, ?> serviceProps) {
 
-        boolean doUpdate = false;
-
-        Map<String, Filter> newData = topics.stream()
+        Map<String, Filter> newData;
+        Supplier<Map<String, Filter>> fromTopics = () -> topics.stream()
                 .collect(toMap(identity(), x -> filter, (a,b) -> a));
         
+        switch(configuration.listener_selection()) {
+            case ALL:
+                newData = fromTopics.get();
+                break;
+            case CUSTOM:
+                String listenerFilterString = configuration.listener_selection_custom_filter();
+                try {
+                    Filter listenerFilter = FrameworkUtil.createFilter(listenerFilterString);
+                    
+                    if(listenerFilter.matches(serviceProps)) {
+                        newData = fromTopics.get();
+                        break;
+                    }
+                } catch (InvalidSyntaxException ise) {
+                    //TODO log that this is ignored;
+                }
+                newData = new HashMap<>();
+                break;
+            case WITH_FILTER:
+                newData = filter == null ? new HashMap<>() : fromTopics.get();
+                break;
+            case WITH_PROPERTY:
+                boolean hasProperty = Boolean.valueOf(String.valueOf(serviceProps.get(RECEIVE_REMOTE_EVENTS)));
+                newData = hasProperty ? fromTopics.get() : new HashMap<>();
+                break;
+            default:
+                newData = new HashMap<>();
+                break;
+        
+        }
+        
+        boolean doUpdate;
         Map<String, Filter> updatedFilters;
         synchronized(lock) {
-            doUpdate = true;
             servicesToInterests.put(id, newData);
+            
+            Map<String, Filter> tmpFilters = topicsToFilters;
             topicsToFilters = getUpdatedFilters();
+            
+            doUpdate = !tmpFilters.equals(topicsToFilters);
+            
             updatedFilters = topicsToFilters;
         }
         

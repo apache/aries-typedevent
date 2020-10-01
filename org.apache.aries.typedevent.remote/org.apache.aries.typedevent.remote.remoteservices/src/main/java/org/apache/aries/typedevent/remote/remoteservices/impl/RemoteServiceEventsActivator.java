@@ -95,7 +95,8 @@ public class RemoteServiceEventsActivator implements BundleActivator {
                 .flatMap(remi -> register(RemoteEventMonitor.class, remi, new HashMap<>()));
 
         OSGi<Object> remote = bundleContext().flatMap(ctx -> service(once(serviceReferences(TypedEventBus.class)))
-                .map(RemoteEventBusImpl::new).effects(rebi -> rebi.init(ctx), rebi -> rebi.destroy())
+                .map(teb -> new RemoteEventBusImpl(teb, configuration))
+                .effects(rebi -> rebi.init(ctx), rebi -> rebi.destroy())
                 .flatMap(rebi -> all(
                         just(new UntypedEventTracker(ctx, rebi)).map(ServiceTracker.class::cast)
                                 .effects(st -> st.open(), st -> st.close()),
@@ -124,7 +125,7 @@ public class RemoteServiceEventsActivator implements BundleActivator {
         return map;
     }
 
-    private Map<String, Object> getServiceProps(ServiceReference<?> ref) {
+    private static Map<String, Object> getServiceProps(ServiceReference<?> ref) {
         return Arrays.stream(ref.getPropertyKeys()).collect(Collectors.toMap(identity(), ref::getProperty));
     }
 
@@ -185,7 +186,7 @@ public class RemoteServiceEventsActivator implements BundleActivator {
                 // TODO Auto-generated catch block
                 return reference;
             }
-            impl.updateLocalInterest(getServiceId(reference), getTopics(reference), filter);
+            impl.updateLocalInterest(getServiceId(reference), getTopics(reference), filter, getServiceProps(reference));
             return reference;
         }
 
@@ -199,7 +200,7 @@ public class RemoteServiceEventsActivator implements BundleActivator {
                 impl.removeLocalInterest(getServiceId(reference));
                 return;
             }
-            impl.updateLocalInterest(getServiceId(reference), getTopics(reference), filter);
+            impl.updateLocalInterest(getServiceId(reference), getTopics(reference), filter, getServiceProps(reference));
         }
 
         @Override
@@ -230,7 +231,7 @@ public class RemoteServiceEventsActivator implements BundleActivator {
             }
             List<String> topics = findTopics(reference, toReturn);
             if (!topics.isEmpty()) {
-                impl.updateLocalInterest(getServiceId(reference), topics, filter);
+                impl.updateLocalInterest(getServiceId(reference), topics, filter, getServiceProps(reference));
             }
             return toReturn;
         }
@@ -320,7 +321,7 @@ public class RemoteServiceEventsActivator implements BundleActivator {
             if (topics.isEmpty()) {
                 impl.removeLocalInterest(getServiceId(reference));
             } else {
-                impl.updateLocalInterest(getServiceId(reference), getTopics(reference), filter);
+                impl.updateLocalInterest(getServiceId(reference), getTopics(reference), filter, getServiceProps(reference));
             }
         }
 

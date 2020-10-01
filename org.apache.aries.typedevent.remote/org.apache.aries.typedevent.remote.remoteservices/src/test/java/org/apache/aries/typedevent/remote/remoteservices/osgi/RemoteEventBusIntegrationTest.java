@@ -16,6 +16,7 @@
  */
 package org.apache.aries.typedevent.remote.remoteservices.osgi;
 
+import static org.apache.aries.typedevent.remote.api.RemoteEventConstants.RECEIVE_REMOTE_EVENTS;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -91,7 +92,7 @@ public class RemoteEventBusIntegrationTest extends AbstractIntegrationTest {
     TypedEventBus bus;
 
     @Mock
-    UntypedEventHandler untypedEventHandler;
+    UntypedEventHandler untypedEventHandler, untypedEventHandler2;
 
     @Mock
     UnhandledEventHandler unhandledEventHandler;
@@ -330,19 +331,45 @@ public class RemoteEventBusIntegrationTest extends AbstractIntegrationTest {
         
         props = new Hashtable<>();
         props.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+        props.put(RECEIVE_REMOTE_EVENTS, true);
         props.put(TYPED_EVENT_FILTER, "(message=boo)");
         
         regs.add(remoteContext.registerService(UNTYPED_HANDLER, 
                 new EventHandlerFactory(untypedEventHandler, UNTYPED_HANDLER), props));
+
+        props = new Hashtable<>();
+        props.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+        props.put(RECEIVE_REMOTE_EVENTS, false);
+        props.put(TYPED_EVENT_FILTER, "(message=far)");
+        
+        regs.add(remoteContext.registerService(UNTYPED_HANDLER, 
+                new EventHandlerFactory(untypedEventHandler2, UNTYPED_HANDLER), props));
         
         
         bus.deliver(event);
         
         verify(unhandledEventHandler, Mockito.after(1000).times(1))
             .notifyUnhandled(eq(TEST_EVENT_TOPIC), argThat(isUntypedTestEventWithMessage("boo")));
+
+        verify(untypedEventHandler2, Mockito.after(1000).never())
+            .notifyUntyped(eq(TEST_EVENT_TOPIC), argThat(isUntypedTestEventWithMessage("boo")));
         
         verify(untypedEventHandler)
             .notifyUntyped(eq(TEST_EVENT_TOPIC), argThat(isUntypedTestEventWithMessage("boo")));
+        
+        event = new TestEvent();
+        event.message = "far";
+        
+        bus.deliver(event);
+        
+        verify(unhandledEventHandler, Mockito.after(100).times(1))
+        .notifyUnhandled(eq(TEST_EVENT_TOPIC), argThat(isUntypedTestEventWithMessage("far")));
+
+        verify(untypedEventHandler2, Mockito.after(1000).never())
+        .notifyUntyped(eq(TEST_EVENT_TOPIC), argThat(isUntypedTestEventWithMessage("far")));
+    
+        verify(untypedEventHandler, Mockito.after(1000).never())
+        .notifyUntyped(eq(TEST_EVENT_TOPIC), argThat(isUntypedTestEventWithMessage("far")));
     }
     
 }
