@@ -16,13 +16,18 @@
  */
 package org.apache.aries.typedevent.remote.remoteservices.impl;
 
+import static java.lang.Boolean.TRUE;
 import static java.util.Collections.emptyList;
+import static java.util.Collections.emptyMap;
+import static java.util.Collections.singletonMap;
+import static org.apache.aries.typedevent.remote.api.RemoteEventConstants.RECEIVE_REMOTE_EVENTS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.osgi.framework.FrameworkUtil.createFilter;
 
 import java.util.Arrays;
 import java.util.Dictionary;
+import java.util.HashMap;
 
 import org.apache.aries.typedevent.remote.remoteservices.spi.RemoteEventBus;
 import org.junit.jupiter.api.AfterEach;
@@ -65,7 +70,7 @@ public class RemoteEventBusImplTest {
                 Mockito.any(RemoteEventBus.class), Mockito.any())).thenReturn(remoteReg);
         Mockito.when(remoteReg.getReference()).thenReturn(remoteRef);
         
-        remoteImpl = new RemoteEventBusImpl(eventBusImpl);
+        remoteImpl = new RemoteEventBusImpl(eventBusImpl, new HashMap<>());
     }
 
     
@@ -98,7 +103,8 @@ public class RemoteEventBusImplTest {
     @Test
     public void testStartWithDetails() throws InvalidSyntaxException {
         
-        remoteImpl.updateLocalInterest(42L, Arrays.asList("FOO"), createFilter("(fizz=buzz)"));
+        remoteImpl.updateLocalInterest(42L, Arrays.asList("FOO"), createFilter("(fizz=buzz)"), 
+                singletonMap(RECEIVE_REMOTE_EVENTS, TRUE));
         
         remoteImpl.init(context);
         
@@ -139,7 +145,8 @@ public class RemoteEventBusImplTest {
         
         // Add a listener to the remote
         
-        remoteImpl.updateLocalInterest(42L, Arrays.asList("FOO"), createFilter("(fizz=buzz)"));
+        remoteImpl.updateLocalInterest(42L, Arrays.asList("FOO"), createFilter("(fizz=buzz)"),
+                singletonMap(RECEIVE_REMOTE_EVENTS, TRUE));
         
         Mockito.verify(remoteReg, Mockito.times(2)).setProperties(propsCaptor.capture());
         
@@ -147,5 +154,29 @@ public class RemoteEventBusImplTest {
         
         assertEquals(RemoteEventBus.class.getName(), props.get("service.exported.interfaces"));
         assertEquals(Arrays.asList("FOO=(fizz=buzz)"), props.get(RemoteEventBus.REMOTE_EVENT_FILTERS));
+    }
+    
+    @Test
+    public void testStartWithNonRemoteListener() throws InvalidSyntaxException {
+        
+        remoteImpl.updateLocalInterest(42L, Arrays.asList("FOO"), createFilter("(fizz=buzz)"), 
+                emptyMap());
+        
+        remoteImpl.init(context);
+        
+        ArgumentCaptor<Dictionary<String, Object>> propsCaptor = ArgumentCaptor.forClass(Dictionary.class); 
+        
+        Mockito.verify(context).registerService(Mockito.eq(RemoteEventBus.class), Mockito.same(remoteImpl),
+                propsCaptor.capture());
+    
+        Dictionary<String, Object> props = propsCaptor.getValue();
+        assertNull(props);
+
+        Mockito.verify(remoteReg).setProperties(propsCaptor.capture());
+        
+        props = propsCaptor.getValue();
+        
+        assertEquals(RemoteEventBus.class.getName(), props.get("service.exported.interfaces"));
+        assertEquals(emptyList(), props.get(RemoteEventBus.REMOTE_EVENT_FILTERS));
     }
 }
