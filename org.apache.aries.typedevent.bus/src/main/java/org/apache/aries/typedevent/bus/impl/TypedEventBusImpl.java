@@ -442,7 +442,7 @@ public class TypedEventBusImpl implements TypedEventBus {
         private final AtomicBoolean running = new AtomicBoolean(true);
 
         public EventThread() {
-            super("BRAIN-IoT EventBus Delivery Thread");
+            super("Apache Aries TypedEventBus Delivery Thread");
         }
 
         public void shutdown() {
