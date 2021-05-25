@@ -398,7 +398,7 @@ public class TypedEventBusImpl implements TypedEventBus {
 
             if (deliveryTasks.isEmpty()) {
                 // TODO log properly
-                System.out.println("Unhandled Event Handlers are being used for event sent to topic" + topic);
+                System.out.println("Unhandled Event Handlers are being used for event sent to topic " + topic);
                 deliveryTasks = unhandledEventHandlers.stream()
                         .map(handler -> new UnhandledEventTask(topic, convertibleEventData, handler)).collect(toList());
             }
