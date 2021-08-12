@@ -34,6 +34,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -366,17 +367,22 @@ public class TypedEventBusImpl implements TypedEventBus {
 
     @Override
     public void deliver(Object event) {
+    	Objects.requireNonNull(event, "The event object must not be null");
         String topicName = event.getClass().getName().replace('.', '/');
         deliver(topicName, event);
     }
 
     @Override
     public void deliver(String topic, Object event) {
+    	checkTopicSyntax(topic);
+    	Objects.requireNonNull(event, "The event object must not be null");
         deliver(topic, EventConverter.forTypedEvent(event));
     }
 
     @Override
     public void deliverUntyped(String topic, Map<String, ?> eventData) {
+    	checkTopicSyntax(topic);
+    	Objects.requireNonNull(eventData, "The event object must not be null");
         deliver(topic, EventConverter.forUntypedEvent(eventData));
     }
 
@@ -409,6 +415,28 @@ public class TypedEventBusImpl implements TypedEventBus {
         queue.addAll(deliveryTasks);
     }
 
+    private static void checkTopicSyntax(String topic) {
+    	
+    	if(topic == null) {
+    		throw new IllegalArgumentException("The topic name is not permitted to be null");
+    	}
+    	
+    	boolean slashPermitted = false;
+    	for(int i = 0; i < topic.length(); i++) {
+    		int c = topic.codePointAt(i);
+    		if('/' == c) {
+    			if(slashPermitted && i != (topic.length() - 1)) {
+    				slashPermitted = false;
+    				continue;
+    			}
+    		} else if ('-' == c || Character.isJavaIdentifierPart(c)) {
+    			slashPermitted = true;
+    			continue;
+    		}
+    		throw new IllegalArgumentException("Illegal character " + c + " at index " + i + " of topic string: " + topic);
+    	}
+    }
+    
     private class EventThread extends Thread {
 
         private final AtomicBoolean running = new AtomicBoolean(true);

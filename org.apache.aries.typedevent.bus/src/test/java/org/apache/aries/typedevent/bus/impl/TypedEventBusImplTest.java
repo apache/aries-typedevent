@@ -261,7 +261,7 @@ public class TypedEventBusImplTest {
 
         Map<String, Object> serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TYPED_EVENT_TOPICS, TestEvent.class.getName());
+        serviceProperties.put(TYPED_EVENT_TOPICS, TestEvent.class.getName().replace('.', '/'));
         serviceProperties.put(TYPED_EVENT_TYPE, TestEvent.class.getName());
         serviceProperties.put(SERVICE_ID, 42L);
 
@@ -269,7 +269,7 @@ public class TypedEventBusImplTest {
 
         serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TYPED_EVENT_TOPICS, TestEvent2.class.getName());
+        serviceProperties.put(TYPED_EVENT_TOPICS, TestEvent2.class.getName().replace('.', '/'));
         serviceProperties.put(TYPED_EVENT_TYPE, TestEvent2.class.getName());
         serviceProperties.put(SERVICE_ID, 43L);
 
@@ -277,30 +277,30 @@ public class TypedEventBusImplTest {
 
         serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TYPED_EVENT_TOPICS, TestEvent.class.getName());
+        serviceProperties.put(TYPED_EVENT_TOPICS, TestEvent.class.getName().replace('.', '/'));
         serviceProperties.put(SERVICE_ID, 44L);
 
         impl.addUntypedEventHandler(untypedHandlerA, serviceProperties);
 
         serviceProperties = new HashMap<>();
 
-        serviceProperties.put(TYPED_EVENT_TOPICS, TestEvent2.class.getName());
+        serviceProperties.put(TYPED_EVENT_TOPICS, TestEvent2.class.getName().replace('.', '/'));
         serviceProperties.put(SERVICE_ID, 45L);
 
         impl.addUntypedEventHandler(untypedHandlerB, serviceProperties);
 
-        impl.deliver(event.getClass().getName(), standardConverter().convert(event).to(Map.class));
+        impl.deliver(event.getClass().getName().replace('.', '/'), standardConverter().convert(event).to(Map.class));
 
         assertTrue(semA.tryAcquire(1, TimeUnit.SECONDS));
 
-        Mockito.verify(handlerA).notify(Mockito.eq(TestEvent.class.getName()),
+        Mockito.verify(handlerA).notify(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
                 Mockito.argThat(isTestEventWithMessage("boo")));
 
         assertFalse(semB.tryAcquire(1, TimeUnit.SECONDS));
 
         assertTrue(untypedSemA.tryAcquire(1, TimeUnit.SECONDS));
 
-        Mockito.verify(untypedHandlerA).notifyUntyped(Mockito.eq(TestEvent.class.getName()),
+        Mockito.verify(untypedHandlerA).notifyUntyped(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
                 Mockito.argThat(isUntypedTestEventWithMessage("boo")));
 
         assertFalse(untypedSemB.tryAcquire(1, TimeUnit.SECONDS));
