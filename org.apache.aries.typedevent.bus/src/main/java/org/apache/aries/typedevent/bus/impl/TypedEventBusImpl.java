@@ -41,6 +41,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 
 import org.osgi.annotation.bundle.Capability;
+import org.osgi.framework.Bundle;
 import org.osgi.framework.Constants;
 import org.osgi.framework.Filter;
 import org.osgi.framework.FrameworkUtil;
@@ -118,20 +119,20 @@ public class TypedEventBusImpl implements TypedEventBus {
         this.monitorImpl = monitorImpl;
     }
 
-    void addTypedEventHandler(TypedEventHandler<?> handler, Map<String, Object> properties) {
-        Class<?> clazz = discoverTypeForTypedHandler(handler, properties);
+    void addTypedEventHandler(Bundle registeringBundle, TypedEventHandler<?> handler, Map<String, Object> properties) {
+        Class<?> clazz = discoverTypeForTypedHandler(registeringBundle, handler, properties);
         
         String defaultTopic = clazz == null ? null : clazz.getName().replace(".", "/");
 
         doAddEventHandler(topicsToTypedHandlers, knownTypedHandlers, handler, defaultTopic, properties);
     }
 
-    private Class<?> discoverTypeForTypedHandler(TypedEventHandler<?> handler, Map<String, Object> properties) {
+    private Class<?> discoverTypeForTypedHandler(Bundle registeringBundle, TypedEventHandler<?> handler, Map<String, Object> properties) {
         Class<?> clazz = null;
         Object type = properties.get(TypedEventConstants.TYPED_EVENT_TYPE);
         if (type != null) {
             try {
-                 clazz = handler.getClass().getClassLoader().loadClass(String.valueOf(type));
+                 clazz = registeringBundle.loadClass(String.valueOf(type));
             } catch (ClassNotFoundException e) {
                 // TODO Blow up
                 e.printStackTrace();
@@ -293,14 +294,14 @@ public class TypedEventBusImpl implements TypedEventBus {
         }
     }
 
-    void updatedTypedEventHandler(Map<String, Object> properties) {
+    void updatedTypedEventHandler(Bundle registeringBundle, Map<String, Object> properties) {
         Long serviceId = getServiceId(properties);
         TypedEventHandler<?> handler;
         synchronized (lock) {
             handler = knownTypedHandlers.get(serviceId);
         }
         
-        Class<?> clazz = discoverTypeForTypedHandler(handler, properties);
+        Class<?> clazz = discoverTypeForTypedHandler(registeringBundle, handler, properties);
         
         String defaultTopic = clazz == null ? null : clazz.getName().replace(".", "/");
         
