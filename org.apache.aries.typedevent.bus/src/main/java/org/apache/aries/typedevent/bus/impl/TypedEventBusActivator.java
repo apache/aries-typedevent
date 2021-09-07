@@ -93,18 +93,21 @@ public class TypedEventBusActivator implements BundleActivator {
                                 serviceReferences(TypedEventHandler.class, 
                                         csr -> {
                                             tebi.updatedTypedEventHandler(
+                                            		csr.getServiceReference().getBundle(),
                                                     getServiceProps(csr.getServiceReference()));
                                             return false;
                                         })
                                         .flatMap(csr -> service(csr)
                                                 .effects(
-                                                         handler -> tebi.addTypedEventHandler(handler,
+                                                         handler -> tebi.addTypedEventHandler(
+                                                        		 	csr.getServiceReference().getBundle(),
+                                                        		 	handler,
                                                                     getServiceProps(csr.getServiceReference())),
                                                          handler -> tebi.removeTypedEventHandler(handler,
                                                                     getServiceProps(csr.getServiceReference())))),
                                 serviceReferences(UntypedEventHandler.class, 
                                         csr -> {
-                                            tebi.updatedTypedEventHandler(
+                                            tebi.updatedUntypedEventHandler(
                                                     getServiceProps(csr.getServiceReference()));
                                             return false;
                                         })

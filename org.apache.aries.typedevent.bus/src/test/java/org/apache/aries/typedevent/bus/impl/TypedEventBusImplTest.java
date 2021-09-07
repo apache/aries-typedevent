@@ -39,6 +39,7 @@ import org.mockito.ArgumentMatcher;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.osgi.framework.Bundle;
 import org.osgi.framework.Constants;
 import org.osgi.service.typedevent.TypedEventHandler;
 import org.osgi.service.typedevent.UnhandledEventHandler;
@@ -63,6 +64,9 @@ public class TypedEventBusImplTest {
     }
 
     @Mock(lenient = true)
+    Bundle registeringBundle;
+
+    @Mock(lenient = true)
     TypedEventHandler<Object> handlerA, handlerB;
 
     @Mock(lenient = true)
@@ -80,9 +84,12 @@ public class TypedEventBusImplTest {
     private AutoCloseable mocks;
 
     @BeforeEach
-    public void start() {
+    public void start() throws ClassNotFoundException {
 
         mocks = MockitoAnnotations.openMocks(this);
+        
+        Mockito.doAnswer(i -> TestEvent.class.getClassLoader().loadClass(i.getArgument(0, String.class)))
+        	.when(registeringBundle).loadClass(Mockito.anyString());
         
         Mockito.doAnswer(i -> {
             semA.release();
@@ -139,7 +146,7 @@ public class TypedEventBusImplTest {
         serviceProperties.put(TYPED_EVENT_TYPE, TestEvent.class.getName());
         serviceProperties.put(SERVICE_ID, 42L);
 
-        impl.addTypedEventHandler(handlerA, serviceProperties);
+        impl.addTypedEventHandler(registeringBundle, handlerA, serviceProperties);
 
         serviceProperties = new HashMap<>();
 
@@ -147,7 +154,7 @@ public class TypedEventBusImplTest {
         serviceProperties.put(TYPED_EVENT_TYPE, TestEvent2.class.getName());
         serviceProperties.put(SERVICE_ID, 43L);
 
-        impl.addTypedEventHandler(handlerB, serviceProperties);
+        impl.addTypedEventHandler(registeringBundle, handlerB, serviceProperties);
 
         serviceProperties = new HashMap<>();
 
@@ -211,20 +218,20 @@ public class TypedEventBusImplTest {
         Map<String, Object> serviceProperties = new HashMap<>();
         serviceProperties.put(SERVICE_ID, 42L);
         
-        impl.addTypedEventHandler(handler, serviceProperties);
+        impl.addTypedEventHandler(registeringBundle, handler, serviceProperties);
         
         serviceProperties = new HashMap<>();
         
         serviceProperties.put(TYPED_EVENT_TYPE, SpecialTestEvent.class.getName());
         serviceProperties.put(SERVICE_ID, 43L);
         
-        impl.addTypedEventHandler(handler2, serviceProperties);
+        impl.addTypedEventHandler(registeringBundle, handler2, serviceProperties);
 
         serviceProperties = new HashMap<>();
         
         serviceProperties.put(SERVICE_ID, 44L);
         
-        impl.addTypedEventHandler(handler3, serviceProperties);
+        impl.addTypedEventHandler(registeringBundle, handler3, serviceProperties);
         
         impl.deliver(event);
         
@@ -265,7 +272,7 @@ public class TypedEventBusImplTest {
         serviceProperties.put(TYPED_EVENT_TYPE, TestEvent.class.getName());
         serviceProperties.put(SERVICE_ID, 42L);
 
-        impl.addTypedEventHandler(handlerA, serviceProperties);
+        impl.addTypedEventHandler(registeringBundle, handlerA, serviceProperties);
 
         serviceProperties = new HashMap<>();
 
@@ -273,7 +280,7 @@ public class TypedEventBusImplTest {
         serviceProperties.put(TYPED_EVENT_TYPE, TestEvent2.class.getName());
         serviceProperties.put(SERVICE_ID, 43L);
 
-        impl.addTypedEventHandler(handlerB, serviceProperties);
+        impl.addTypedEventHandler(registeringBundle, handlerB, serviceProperties);
 
         serviceProperties = new HashMap<>();
 
@@ -322,7 +329,7 @@ public class TypedEventBusImplTest {
         serviceProperties.put(TYPED_EVENT_FILTER, "(message=foo)");
         serviceProperties.put(SERVICE_ID, 42L);
 
-        impl.addTypedEventHandler(handlerA, serviceProperties);
+        impl.addTypedEventHandler(registeringBundle, handlerA, serviceProperties);
 
         serviceProperties = new HashMap<>();
 
@@ -331,7 +338,7 @@ public class TypedEventBusImplTest {
         serviceProperties.put(TYPED_EVENT_FILTER, "(message=bar)");
         serviceProperties.put(SERVICE_ID, 43L);
 
-        impl.addTypedEventHandler(handlerB, serviceProperties);
+        impl.addTypedEventHandler(registeringBundle, handlerB, serviceProperties);
 
         serviceProperties = new HashMap<>();
 
@@ -403,7 +410,7 @@ public class TypedEventBusImplTest {
         serviceProperties.put(TYPED_EVENT_FILTER, "");
         serviceProperties.put(SERVICE_ID, 42L);
 
-        impl.addTypedEventHandler(handlerA, serviceProperties);
+        impl.addTypedEventHandler(registeringBundle, handlerA, serviceProperties);
 
         TestEvent event = new TestEvent();
         event.message = "foo";
@@ -428,7 +435,7 @@ public class TypedEventBusImplTest {
         serviceProperties.put(TYPED_EVENT_FILTER, "(message=foo)");
         serviceProperties.put(SERVICE_ID, 42L);
 
-        impl.addTypedEventHandler(handlerA, serviceProperties);
+        impl.addTypedEventHandler(registeringBundle, handlerA, serviceProperties);
 
         serviceProperties = new HashMap<>();
 
