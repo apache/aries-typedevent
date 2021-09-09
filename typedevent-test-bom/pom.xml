@@ -14,7 +14,7 @@
     <parent>
         <groupId>org.apache.aries.typedevent</groupId>
         <artifactId>typedevent-parent</artifactId>
-        <version>0.0.1-RC1</version>
+        <version>0.0.2-SNAPSHOT</version>
     </parent>
     <artifactId>typedevent-test-bom</artifactId>
     <packaging>pom</packaging>
