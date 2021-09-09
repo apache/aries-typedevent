@@ -36,13 +36,13 @@ public interface RemoteEventMonitor {
      * In some cases this may be more optimal than adding your own filter to the returned
      * PushStream.
      *
-     * @param filters containing filter expression definitions. The {@link RemoteMonitorEvent#eventType}
-     *                field is available with the key <code>-eventType</code> and the
-     *                {@link RemoteMonitorEvent#publishType} field is available with the key
-     *                <code>-publishType</code>, in addition to fields defined in the event.
+     * @param filters containing filter expression definitions. The {@link RemoteMonitorEvent#publishType} 
+     *                field is available with the key <code>-publishType</code>, in addition to fields 
+     *                defined in the event.
+     *                <p>
      *                If the event contains nested data structures then those are accessible using
      *                nested key names separated by a '.' character (e.g. <code>"foo.bar"</code>
-     *                would correspond to the <code>bar<code> field of the <code>foo</code> value
+     *                would correspond to the <code>bar</code> field of the <code>foo</code> value
      *                from the event.
      *                <p>
      *                If a {@link FilterDTO} contains both LDAP and regular expressions, then both must match.
@@ -61,13 +61,13 @@ public interface RemoteEventMonitor {
      * may be returned if history is unavailable, or if
      * insufficient events have been sent.
      *
-     * @param filters containing filter expression definitions. The {@link RemoteMonitorEvent#eventType}
-     *                field is available with the key <code>-eventType</code> and the
-     *                {@link RemoteMonitorEvent#publishType} field is available with the key
-     *                <code>-publishType</code>, in addition to fields defined in the event.
+     * @param filters containing filter expression definitions. The {@link RemoteMonitorEvent#publishType} 
+     *                field is available with the key <code>-publishType</code>, in addition to fields 
+     *                defined in the event.
+     *                <p>
      *                If the event contains nested data structures then those are accessible using
      *                nested key names separated by a '.' character (e.g. <code>"foo.bar"</code>
-     *                would correspond to the <code>bar<code> field of the <code>foo</code> value
+     *                would correspond to the <code>bar</code> field of the <code>foo</code> value
      *                from the event.
      *                <p>
      *                If a {@link FilterDTO} contains both LDAP and regular expressions, then both must match.
@@ -87,13 +87,13 @@ public interface RemoteEventMonitor {
      * that events may have been discarded, or history
      * unavailable.
      *
-     * @param filters containing filter expression definitions. The {@link RemoteMonitorEvent#eventType}
-     *                field is available with the key <code>-eventType</code> and the
-     *                {@link RemoteMonitorEvent#publishType} field is available with the key
-     *                <code>-publishType</code>, in addition to fields defined in the event.
+     * @param filters containing filter expression definitions. The {@link RemoteMonitorEvent#publishType} 
+     *                field is available with the key <code>-publishType</code>, in addition to fields 
+     *                defined in the event.
+     *                <p>
      *                If the event contains nested data structures then those are accessible using
      *                nested key names separated by a '.' character (e.g. <code>"foo.bar"</code>
-     *                would correspond to the <code>bar<code> field of the <code>foo</code> value
+     *                would correspond to the <code>bar</code> field of the <code>foo</code> value
      *                from the event.
      *                <p>
      *                If a {@link FilterDTO} contains both LDAP and regular expressions, then both must match.

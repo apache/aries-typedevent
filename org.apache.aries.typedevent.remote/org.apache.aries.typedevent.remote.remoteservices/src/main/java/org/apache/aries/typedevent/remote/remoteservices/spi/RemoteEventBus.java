@@ -30,13 +30,15 @@ import org.osgi.annotation.versioning.ProviderType;
 public interface RemoteEventBus {
     
     /**
-     * This service property provides a String+ containing <topic>=<filter> 
+     * This service property provides a String+ containing &lt;topic&gt;=&lt;filter&gt; 
      * entries indicating the events that the remote nodes are interested in.
      */
     public static final String REMOTE_EVENT_FILTERS = "remote.event.filters";
     
     /**   
      * Called to notify this instance of an event from a remote framework
+     * @param topic The topic
+     * @param eventData The untyped event data
      */
     public void notify(String topic, Map<String, Object> eventData);
 }
