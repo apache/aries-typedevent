@@ -37,10 +37,11 @@
             <groupId>org.osgi</groupId>
             <artifactId>org.osgi.core</artifactId>
         </dependency>
+        <!-- Temporary removal while using the locally built interfaces
         <dependency>
             <groupId>org.osgi</groupId>
             <artifactId>org.osgi.service.typedevent</artifactId>
-        </dependency>
+        </dependency> -->
         <dependency>
             <groupId>org.osgi</groupId>
             <artifactId>osgi.annotation</artifactId>
@@ -89,6 +90,38 @@
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-core</artifactId>
         </dependency>
+        
+        <!-- Temporary additions to compile the OSGi interfaces -->
+        <dependency>
+			<groupId>org.osgi</groupId>
+			<artifactId>org.osgi.annotation.bundle</artifactId>
+		</dependency>
+        <dependency>
+			<groupId>org.osgi</groupId>
+			<artifactId>org.osgi.service.component.annotations</artifactId>
+		</dependency>
+        <dependency>
+			<groupId>org.osgi</groupId>
+			<artifactId>org.osgi.namespace.implementation</artifactId>
+			<version>1.0.0</version>
+		</dependency>
+		<dependency>
+			<groupId>org.osgi</groupId>
+			<artifactId>org.osgi.util.pushstream</artifactId>
+			<version>1.0.0</version>
+		</dependency>
+		<dependency>
+			<groupId>org.osgi</groupId>
+			<artifactId>org.osgi.util.function</artifactId>
+			<version>1.1.0</version>
+			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.osgi</groupId>
+			<artifactId>org.osgi.util.promise</artifactId>
+			<version>1.1.0</version>
+			<scope>runtime</scope>
+		</dependency>
     </dependencies>
     
     <build>

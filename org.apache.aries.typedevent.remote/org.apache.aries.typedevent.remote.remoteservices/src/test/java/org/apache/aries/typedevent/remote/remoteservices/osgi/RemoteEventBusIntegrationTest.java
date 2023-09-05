@@ -324,7 +324,7 @@ public class RemoteEventBusIntegrationTest extends AbstractIntegrationTest {
         BundleContext remoteContext = frameworks.values().stream()
                 .filter(fw -> !getUUID(fw).equals(getMasterFrameworkUUID()))
                 .flatMap(fw -> Arrays.stream(fw.getBundleContext().getBundles()))
-                .filter(b -> b.getSymbolicName().equals("org.osgi.service.typedevent"))
+                .filter(b -> b.getSymbolicName().equals("org.apache.aries.typedevent.bus"))
                 .map(Bundle::getBundleContext)
                 .findFirst()
                 .get();

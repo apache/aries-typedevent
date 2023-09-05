@@ -18,9 +18,11 @@
 package org.apache.aries.typedevent.bus.impl;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mock.Strictness.LENIENT;
 import static org.osgi.framework.Constants.SERVICE_ID;
 import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_FILTER;
 import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_TOPICS;
@@ -35,16 +37,19 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatcher;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.Constants;
 import org.osgi.service.typedevent.TypedEventHandler;
+import org.osgi.service.typedevent.TypedEventPublisher;
 import org.osgi.service.typedevent.UnhandledEventHandler;
 import org.osgi.service.typedevent.UntypedEventHandler;
 
+@ExtendWith(MockitoExtension.class)
 public class TypedEventBusImplTest {
 
     private static final String SPECIAL_TEST_EVENT_TOPIC = SpecialTestEvent.class.getName().replace(".", "/");
@@ -65,16 +70,16 @@ public class TypedEventBusImplTest {
         
     }
 
-    @Mock(lenient = true)
+    @Mock(strictness = LENIENT)
     Bundle registeringBundle;
 
-    @Mock(lenient = true)
+    @Mock(strictness = LENIENT)
     TypedEventHandler<Object> handlerA, handlerB;
 
-    @Mock(lenient = true)
+    @Mock(strictness = LENIENT)
     UntypedEventHandler untypedHandlerA, untypedHandlerB;
 
-    @Mock(lenient = true)
+    @Mock(strictness = LENIENT)
     UnhandledEventHandler unhandledHandler;
 
     Semaphore semA = new Semaphore(0), semB = new Semaphore(0), untypedSemA = new Semaphore(0),
@@ -83,13 +88,9 @@ public class TypedEventBusImplTest {
     TypedEventBusImpl impl;
     TypedEventMonitorImpl monitorImpl;
 
-    private AutoCloseable mocks;
-
     @BeforeEach
     public void start() throws ClassNotFoundException {
 
-        mocks = MockitoAnnotations.openMocks(this);
-        
         Mockito.doAnswer(i -> TestEvent.class.getClassLoader().loadClass(i.getArgument(0, String.class)))
         	.when(registeringBundle).loadClass(Mockito.anyString());
         
@@ -128,7 +129,6 @@ public class TypedEventBusImplTest {
     public void stop() throws Exception {
         impl.stop();
         monitorImpl.destroy();
-        mocks.close();
     }
 
     /**
@@ -549,6 +549,91 @@ public class TypedEventBusImplTest {
 
         assertFalse(semA.tryAcquire(1, TimeUnit.SECONDS));
 
+    }
+    
+    /**
+     * Tests that events are delivered correctly using a publisher
+     * 
+     * @throws InterruptedException
+     */
+    @Test
+    public void testEventPublisher() throws InterruptedException {
+
+        TestEvent event = new TestEvent();
+        event.message = "boo";
+
+        Map<String, Object> serviceProperties = new HashMap<>();
+
+        serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+        serviceProperties.put(TYPED_EVENT_TYPE, TestEvent.class.getName());
+        serviceProperties.put(SERVICE_ID, 42L);
+
+        impl.addTypedEventHandler(registeringBundle, handlerA, serviceProperties);
+
+        serviceProperties = new HashMap<>();
+
+        serviceProperties.put(TYPED_EVENT_TOPICS, TestEvent2.class.getName().replace(".", "/"));
+        serviceProperties.put(TYPED_EVENT_TYPE, TestEvent2.class.getName());
+        serviceProperties.put(SERVICE_ID, 43L);
+
+        impl.addTypedEventHandler(registeringBundle, handlerB, serviceProperties);
+
+        serviceProperties = new HashMap<>();
+
+        serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+        serviceProperties.put(SERVICE_ID, 44L);
+
+        impl.addUntypedEventHandler(untypedHandlerA, serviceProperties);
+
+        serviceProperties = new HashMap<>();
+
+        serviceProperties.put(TYPED_EVENT_TOPICS, TestEvent2.class.getName().replace(".", "/"));
+        serviceProperties.put(SERVICE_ID, 45L);
+
+        impl.addUntypedEventHandler(untypedHandlerB, serviceProperties);
+
+        TypedEventPublisher<TestEvent> publisher = impl.createPublisher(TestEvent.class);
+        
+        publisher.deliver(event);
+
+        assertTrue(semA.tryAcquire(1, TimeUnit.SECONDS));
+
+        Mockito.verify(handlerA).notify(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
+                Mockito.argThat(isTestEventWithMessage("boo")));
+
+        assertFalse(semB.tryAcquire(1, TimeUnit.SECONDS));
+
+        assertTrue(untypedSemA.tryAcquire(1, TimeUnit.SECONDS));
+
+        Mockito.verify(untypedHandlerA).notifyUntyped(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
+                Mockito.argThat(isUntypedTestEventWithMessage("boo")));
+
+        assertFalse(untypedSemB.tryAcquire(1, TimeUnit.SECONDS));
+        
+        
+        Map<String, Object> eventMap = Map.of("message", "far");
+        publisher.deliverUntyped(eventMap);
+
+        assertTrue(semA.tryAcquire(1, TimeUnit.SECONDS));
+
+        Mockito.verify(handlerA).notify(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
+                Mockito.argThat(isTestEventWithMessage("far")));
+
+        assertFalse(semB.tryAcquire(1, TimeUnit.SECONDS));
+
+        assertTrue(untypedSemA.tryAcquire(1, TimeUnit.SECONDS));
+
+        Mockito.verify(untypedHandlerA).notifyUntyped(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
+                Mockito.argThat(isUntypedTestEventWithMessage("far")));
+
+        assertFalse(untypedSemB.tryAcquire(1, TimeUnit.SECONDS));        
+        
+        assertTrue(publisher.isOpen());
+        publisher.close();
+        assertFalse(publisher.isOpen());
+        
+        assertThrows(IllegalStateException.class, () -> publisher.deliver(event));
+        assertThrows(IllegalStateException.class, () -> publisher.deliverUntyped(eventMap));
     }
 
     ArgumentMatcher<TestEvent> isTestEventWithMessage(String message) {

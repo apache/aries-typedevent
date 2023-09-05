@@ -37,10 +37,11 @@
             <groupId>org.osgi</groupId>
             <artifactId>org.osgi.core</artifactId>
         </dependency>
+        <!-- Temporary removal while using the locally built interfaces
         <dependency>
             <groupId>org.osgi</groupId>
             <artifactId>org.osgi.service.typedevent</artifactId>
-        </dependency>
+        </dependency> -->
         <dependency>
             <groupId>org.osgi</groupId>
             <artifactId>osgi.annotation</artifactId>
@@ -65,6 +66,12 @@
         <dependency>
             <groupId>org.osgi</groupId>
             <artifactId>org.osgi.util.converter</artifactId>
+            <exclusions>
+				<exclusion>
+					<groupId>org.osgi</groupId>
+					<artifactId>org.osgi.util.function</artifactId>
+				</exclusion>
+			</exclusions>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>

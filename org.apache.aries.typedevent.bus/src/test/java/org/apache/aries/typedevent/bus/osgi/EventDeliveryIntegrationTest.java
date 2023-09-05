@@ -29,14 +29,12 @@ import org.apache.aries.typedevent.bus.common.TestEvent2;
 import org.apache.aries.typedevent.bus.common.TestEvent2.EventType;
 import org.apache.aries.typedevent.bus.common.TestEvent2Consumer;
 import org.apache.aries.typedevent.bus.common.TestEventConsumer;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.osgi.framework.BundleContext;
 import org.osgi.service.typedevent.TypedEventBus;
 import org.osgi.service.typedevent.TypedEventConstants;
@@ -56,6 +54,7 @@ import org.osgi.test.junit5.service.ServiceExtension;
  */
 @ExtendWith(BundleContextExtension.class)
 @ExtendWith(ServiceExtension.class)
+@ExtendWith(MockitoExtension.class)
 public class EventDeliveryIntegrationTest extends AbstractIntegrationTest {
     
     @InjectBundleContext
@@ -72,18 +71,6 @@ public class EventDeliveryIntegrationTest extends AbstractIntegrationTest {
 
     @Mock
     UntypedEventHandler untypedEventHandler, untypedEventHandler2;
-
-    private AutoCloseable mocks;
-    
-    @BeforeEach
-    public void setupMocks() {
-        mocks = MockitoAnnotations.openMocks(this);
-    }
-    
-    @AfterEach
-    public void stop() throws Exception {
-        mocks.close();
-    }
     
     /**
      * Tests that events are delivered to untyped Event Handlers

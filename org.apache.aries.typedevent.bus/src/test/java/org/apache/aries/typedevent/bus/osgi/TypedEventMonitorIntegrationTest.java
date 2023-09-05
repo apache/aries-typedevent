@@ -32,12 +32,11 @@ import org.apache.aries.typedevent.bus.common.TestEvent;
 import org.apache.aries.typedevent.bus.common.TestEventConsumer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
 import org.osgi.service.typedevent.TypedEventBus;
@@ -53,12 +52,11 @@ import org.osgi.util.promise.Promise;
 
 @ExtendWith(BundleContextExtension.class)
 @ExtendWith(ServiceExtension.class)
+@ExtendWith(MockitoExtension.class)
 public class TypedEventMonitorIntegrationTest extends AbstractIntegrationTest {
 
     @Mock
     TestEventConsumer typedEventHandler;
-
-    private AutoCloseable mocks;
 
     private static Bundle eventBusBundle;
     
@@ -76,15 +74,8 @@ public class TypedEventMonitorIntegrationTest extends AbstractIntegrationTest {
                 .findAny().orElse(null);
     }
 
-    @BeforeEach
-    public void setupMocks() {
-        mocks = MockitoAnnotations.openMocks(this);
-    }
-
     @AfterEach
     public void stop() throws Exception {
-        mocks.close();
-
         // Needed to clear history from previous tests
         eventBusBundle.stop();
         eventBusBundle.start();

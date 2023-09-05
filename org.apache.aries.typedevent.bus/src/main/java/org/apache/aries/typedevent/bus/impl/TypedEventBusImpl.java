@@ -50,6 +50,7 @@ import org.osgi.framework.InvalidSyntaxException;
 import org.osgi.service.typedevent.TypedEventBus;
 import org.osgi.service.typedevent.TypedEventConstants;
 import org.osgi.service.typedevent.TypedEventHandler;
+import org.osgi.service.typedevent.TypedEventPublisher;
 import org.osgi.service.typedevent.UnhandledEventHandler;
 import org.osgi.service.typedevent.UntypedEventHandler;
 import org.osgi.util.converter.TypeReference;
@@ -568,4 +569,71 @@ public class TypedEventBusImpl implements TypedEventBus {
         }
 
     }
+
+	@Override
+	public <T> TypedEventPublisher<T> createPublisher(Class<T> eventType) {
+		Objects.requireNonNull(eventType, "The event type must not be null");
+        String topicName = eventType.getName().replace('.', '/');
+        checkTopicSyntax(topicName);
+		return new TypedEventPublisherImpl<>(topicName);
+	}
+
+	@Override
+	public <T> TypedEventPublisher<T> createPublisher(String topic, Class<T> eventType) {
+		Objects.requireNonNull(topic, "The event topic must not be null");
+		Objects.requireNonNull(eventType, "The event type must not be null");
+		checkTopicSyntax(topic);
+		return new TypedEventPublisherImpl<>(topic);
+	}
+
+	@Override
+	public TypedEventPublisher<Object> createPublisher(String topic) {
+		Objects.requireNonNull(topic, "The event topic must not be null");
+		checkTopicSyntax(topic);
+		return new TypedEventPublisherImpl<>(topic);
+	}
+	
+	private class TypedEventPublisherImpl<T> implements TypedEventPublisher<T> {
+
+		private final String topic;
+		
+		private final AtomicBoolean open = new AtomicBoolean(true);
+		
+		public TypedEventPublisherImpl(String topic) {
+			this.topic = topic;
+		}
+
+		private void checkOpen() {
+			if(!open.get()) {
+				throw new IllegalStateException("The TypedEventPublisher for topic " + topic + " is closed.");
+			}
+		}
+		
+		@Override
+		public void deliver(T event) {
+			checkOpen();
+			TypedEventBusImpl.this.deliver(topic, EventConverter.forTypedEvent(event));
+		}
+
+		@Override
+		public void deliverUntyped(Map<String, ?> event) {
+			checkOpen();
+			TypedEventBusImpl.this.deliver(topic, EventConverter.forUntypedEvent(event));
+		}
+
+		@Override
+		public String getTopic() {
+			return topic;
+		}
+
+		@Override
+		public void close() {
+			open.set(false);
+		}
+
+		@Override
+		public boolean isOpen() {
+			return open.get();
+		}
+	}
 }
