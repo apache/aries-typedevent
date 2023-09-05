@@ -55,10 +55,6 @@ import org.osgi.util.promise.Promise;
 @ExtendWith(ServiceExtension.class)
 public class TypedEventMonitorIntegrationTest extends AbstractIntegrationTest {
 
-    TypedEventMonitor monitor;
-    
-    TypedEventBus eventBus;
-    
     @Mock
     TestEventConsumer typedEventHandler;
 
@@ -85,17 +81,6 @@ public class TypedEventMonitorIntegrationTest extends AbstractIntegrationTest {
         mocks = MockitoAnnotations.openMocks(this);
     }
 
-    /**
-     * Inject services every time as we restart the eventBus after each test
-     * @param monitor
-     * @param bus
-     */
-    @BeforeEach
-    public void setupMocks(@InjectService TypedEventMonitor monitor, @InjectService TypedEventBus bus) {
-        this.monitor = monitor;
-        this.eventBus = bus;
-    }
-    
     @AfterEach
     public void stop() throws Exception {
         mocks.close();
@@ -112,7 +97,8 @@ public class TypedEventMonitorIntegrationTest extends AbstractIntegrationTest {
      * @throws InvocationTargetException
      */
     @Test
-    public void testTypedEventMonitor1() throws InterruptedException, InvocationTargetException {
+    public void testTypedEventMonitor1(@InjectService TypedEventMonitor monitor, 
+    		@InjectService TypedEventBus eventBus) throws InterruptedException, InvocationTargetException {
 
         Promise<List<MonitorEvent>> eventsPromise = monitor.monitorEvents()
                 .limit(2)
@@ -159,7 +145,8 @@ public class TypedEventMonitorIntegrationTest extends AbstractIntegrationTest {
      * @throws InvocationTargetException
      */
     @Test
-    public void testTypedEventMonitor2() throws InterruptedException, InvocationTargetException {
+    public void testTypedEventMonitor2(@InjectService TypedEventMonitor monitor, 
+    		@InjectService TypedEventBus eventBus) throws InterruptedException, InvocationTargetException {
 
         Promise<List<MonitorEvent>> eventsPromise = monitor.monitorEvents()
                 .limit(2)
@@ -195,7 +182,8 @@ public class TypedEventMonitorIntegrationTest extends AbstractIntegrationTest {
      * @throws InvocationTargetException
      */
     @Test
-    public void testTypedEventMonitorHistory1() throws InterruptedException, InvocationTargetException {
+    public void testTypedEventMonitorHistory1(@InjectService TypedEventMonitor monitor, 
+    		@InjectService TypedEventBus eventBus) throws InterruptedException, InvocationTargetException {
 
         TestEvent event = new TestEvent();
         event.message = "boo";
@@ -256,7 +244,8 @@ public class TypedEventMonitorIntegrationTest extends AbstractIntegrationTest {
      * @throws InvocationTargetException
      */
     @Test
-    public void testTypedEventMonitorHistory2() throws InterruptedException, InvocationTargetException {
+    public void testTypedEventMonitorHistory2(@InjectService TypedEventMonitor monitor, 
+    		@InjectService TypedEventBus eventBus) throws InterruptedException, InvocationTargetException {
 
         Instant beforeFirst = Instant.now().minus(Duration.ofMillis(500));
 

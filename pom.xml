@@ -14,7 +14,7 @@
     <parent>
         <groupId>org.apache</groupId>
         <artifactId>apache</artifactId>
-        <version>23</version>
+        <version>30</version>
         <relativePath />
     </parent>
 
@@ -58,10 +58,11 @@
     </repositories>
 
     <properties>
-        <bnd.version>5.1.2</bnd.version>
+        <bnd.version>6.4.0</bnd.version>
         <dsl.version>1.2.2</dsl.version>
-        <junit.version>5.6.2</junit.version>
-        <mockito.version>3.5.10</mockito.version>
+        <junit.version>5.10.0</junit.version>
+        <mockito.version>5.5.0</mockito.version>
+        <no.test.jar>false</no.test.jar>
     </properties>
 
     <dependencyManagement>
@@ -121,15 +122,16 @@
                 <scope>compile</scope>
             </dependency>
             <dependency>
-                <groupId>org.apache.felix</groupId>
-                <artifactId>org.apache.felix.converter</artifactId>
-                <version>1.0.14</version>
+                <groupId>org.osgi</groupId>
+                <artifactId>org.osgi.util.converter</artifactId>
+                <version>1.0.9</version>
                 <scope>compile</scope>
             </dependency>
             <dependency>
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-api</artifactId>
                 <version>1.7.30</version>
+                <scope>compile</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -140,7 +142,7 @@
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>
                     <artifactId>build-helper-maven-plugin</artifactId>
-                    <version>3.2.0</version>
+                    <version>3.4.0</version>
                     <executions>
                         <execution>
                             <id>regex-property</id>
@@ -160,7 +162,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
-                    <version>3.8.1</version>
+                    <version>3.11.0</version>
                     <configuration>
                         <source>1.8</source>
                         <target>1.8</target>
@@ -169,7 +171,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-jar-plugin</artifactId>
-                    <version>3.2.0</version>
+                    <version>3.3.0</version>
                     <configuration>
                         <archive>
                             <manifestFile>${project.build.outputDirectory}/META-INF/MANIFEST.MF</manifestFile>
@@ -185,6 +187,8 @@
                                 <archive>
                                     <manifestFile>${project.build.testOutputDirectory}/META-INF/MANIFEST.MF</manifestFile>
                                 </archive>
+                                <skip>${no.test.jar}</skip>
+                                <skipIfEmpty>true</skipIfEmpty>
                             </configuration>
                         </execution>
                     </executions>
@@ -192,7 +196,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-javadoc-plugin</artifactId>
-                    <version>3.2.0</version>
+                    <version>3.5.0</version>
                     <configuration>
                         <source>1.8</source>
                     </configuration>
@@ -200,9 +204,8 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
-                    <version>2.22.2</version>
+                    <version>3.1.2</version>
                     <configuration>
-                        <source>1.8</source>
                         <excludes>
                             <exclude>${path.from.artifactId}/osgi/**</exclude>
                         </excludes>
@@ -225,11 +228,12 @@
                                 <goal>bnd-process-tests</goal>
                             </goals>
                             <configuration>
-                                <artifactFragment>true</artifactFragment>
+                                <artifactFragment>false</artifactFragment>
                                 <testCases>useTestCasesHeader</testCases>
                                 <bnd><![CDATA[
                                     Test-Cases:${select;${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.annotation.Testable;CONCRETE};${project.artifactId}.osgi.*}
                                 ]]></bnd>
+                                <skipIfEmpty>true</skipIfEmpty>
                             </configuration>
                         </execution>
                     </executions>
