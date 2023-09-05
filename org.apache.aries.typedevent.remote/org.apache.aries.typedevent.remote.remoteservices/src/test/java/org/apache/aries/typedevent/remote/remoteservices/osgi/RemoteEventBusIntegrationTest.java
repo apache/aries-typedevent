@@ -222,9 +222,9 @@ public class RemoteEventBusIntegrationTest extends AbstractIntegrationTest {
                     b.getSymbolicName().equals("org.apache.aries.typedevent.remote.spi") ||
                     b.getSymbolicName().equals("org.apache.aries.typedevent.remote.remoteservices") ||
                     b.getSymbolicName().equals("org.apache.aries.component-dsl.component-dsl") ||
-                    b.getSymbolicName().equals("org.apache.felix.converter") ||
                     b.getSymbolicName().equals("org.apache.felix.configadmin") ||
                     b.getSymbolicName().equals("org.osgi.service.typedevent") ||
+                    b.getSymbolicName().equals("org.osgi.util.converter") ||
                     b.getSymbolicName().equals("org.osgi.util.function") ||
                     b.getSymbolicName().equals("org.osgi.util.promise") ||
                     b.getSymbolicName().equals("org.osgi.util.pushstream") ||

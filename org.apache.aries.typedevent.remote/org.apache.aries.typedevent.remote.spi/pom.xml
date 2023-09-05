@@ -21,6 +21,10 @@
     <groupId>org.apache.aries.typedevent.remote</groupId>
     <artifactId>org.apache.aries.typedevent.remote.spi</artifactId>
     
+    <properties>
+		<no.test.jar>true</no.test.jar>
+	</properties>
+    
     <dependencies>
         <dependency>
             <groupId>org.osgi</groupId>
@@ -39,8 +43,8 @@
             <artifactId>org.osgi.annotation.bundle</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.apache.felix</groupId>
-            <artifactId>org.apache.felix.converter</artifactId>
+            <groupId>org.osgi</groupId>
+            <artifactId>org.osgi.util.converter</artifactId>
         </dependency>
         <dependency>
             <groupId>org.apache.aries.typedevent.remote</groupId>

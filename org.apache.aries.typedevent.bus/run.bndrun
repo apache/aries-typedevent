@@ -19,25 +19,26 @@
 
 -runfw: org.apache.felix.framework
 
+-runee: JavaSE-1.8
+
 -runrequires: bnd.identity;id="org.apache.aries.typedevent.bus",\
   bnd.identity;id="org.apache.felix.gogo.shell",\
   bnd.identity;id="org.apache.felix.gogo.runtime",\
   bnd.identity;id="org.apache.felix.gogo.command"
-  
 
 -resolve.effective: active
 -runbundles: \
-    ch.qos.logback.classic;version='[1.2.3,1.2.4)',\
-    ch.qos.logback.core;version='[1.2.3,1.2.4)',\
-    org.apache.aries.component-dsl.component-dsl;version='[1.2.2,1.2.3)',\
-    org.apache.aries.typedevent.bus;version='[0.0.1,0.0.2)',\
-    org.apache.felix.configadmin;version='[1.9.18,1.9.19)',\
-    org.apache.felix.converter;version='[1.0.14,1.0.15)',\
-    org.osgi.service.typedevent;version='[1.0.0,1.0.1)',\
-    org.osgi.util.function;version='[1.1.0,1.1.1)',\
-    org.osgi.util.promise;version='[1.1.1,1.1.2)',\
-    org.osgi.util.pushstream;version='[1.0.1,1.0.2)',\
-    slf4j.api;version='[1.7.30,1.7.31)',\
-    org.apache.felix.gogo.command;version='[1.0.2,1.0.3)',\
-    org.apache.felix.gogo.runtime;version='[1.0.10,1.0.11)',\
-    org.apache.felix.gogo.shell;version='[1.0.0,1.0.1)'
+	ch.qos.logback.classic;version='[1.2.3,1.2.4)',\
+	ch.qos.logback.core;version='[1.2.3,1.2.4)',\
+	org.apache.aries.component-dsl.component-dsl;version='[1.2.2,1.2.3)',\
+	org.apache.aries.typedevent.bus;version='[0.0.2,0.0.3)',\
+	org.osgi.service.typedevent;version='[1.0.0,1.0.1)',\
+	org.osgi.util.converter;version='[1.0.9,1.0.10)',\
+	org.osgi.util.function;version='[1.1.0,1.1.1)',\
+	org.osgi.util.promise;version='[1.1.1,1.1.2)',\
+	org.osgi.util.pushstream;version='[1.0.1,1.0.2)',\
+	slf4j.api;version='[1.7.30,1.7.31)',\
+	org.apache.felix.configadmin;version='[1.9.26,1.9.27)',\
+	org.apache.felix.gogo.command;version='[1.1.2,1.1.3)',\
+	org.apache.felix.gogo.runtime;version='[1.1.6,1.1.7)',\
+	org.apache.felix.gogo.shell;version='[1.1.4,1.1.5)'
