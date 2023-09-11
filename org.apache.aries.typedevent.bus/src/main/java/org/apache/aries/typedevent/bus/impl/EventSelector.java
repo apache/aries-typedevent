@@ -18,6 +18,7 @@ package org.apache.aries.typedevent.bus.impl;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Predicate;
 
 import org.osgi.framework.Filter;
@@ -113,6 +114,11 @@ public class EventSelector {
 	public boolean matches(String topic, EventConverter event) {
 		// Must match the topic, and the filter if set
 		return topicMatcher.test(topic) && (filter == null || event.applyFilter(filter));
+	}
+
+	public boolean matches(String topic, Map<String, Object> event) {
+		// Must match the topic, and the filter if set
+		return topicMatcher.test(topic) && (filter == null || filter.matches(event));
 	}
 	
 	private boolean topicMatch(String topic) {

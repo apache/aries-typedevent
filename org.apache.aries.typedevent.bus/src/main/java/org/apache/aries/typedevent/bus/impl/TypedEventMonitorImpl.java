@@ -18,6 +18,8 @@
 package org.apache.aries.typedevent.bus.impl;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
@@ -25,12 +27,17 @@ import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Function;
+import java.util.stream.Stream;
 
 import org.osgi.annotation.bundle.Capability;
 import org.osgi.namespace.service.ServiceNamespace;
 import org.osgi.service.typedevent.monitor.MonitorEvent;
 import org.osgi.service.typedevent.monitor.TypedEventMonitor;
 import org.osgi.util.pushstream.PushEvent;
+import org.osgi.util.pushstream.PushEventConsumer;
 import org.osgi.util.pushstream.PushEventSource;
 import org.osgi.util.pushstream.PushStream;
 import org.osgi.util.pushstream.PushStreamProvider;
@@ -45,7 +52,7 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 
     private final ExecutorService monitoringWorker;
 
-    private final Object lock = new Object();
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
     private final PushStreamProvider psp;
 
@@ -53,7 +60,7 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 
     private final int historySize = 1024;
 
-    public TypedEventMonitorImpl(Map<String, ?> props) {
+    TypedEventMonitorImpl(Map<String, ?> props) {
 
         monitoringWorker = Executors.newCachedThreadPool();
 
@@ -62,25 +69,28 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
                 .withQueuePolicy(QueuePolicyOption.BLOCK).build();
     }
 
-    public void destroy() {
+    void destroy() {
         source.close();
         monitoringWorker.shutdown();
     }
 
-    public void event(String topic, Map<String, Object> eventData) {
+    void event(String topic, Map<String, Object> eventData) throws InterruptedException {
         MonitorEvent me = new MonitorEvent();
         me.eventData = eventData;
         me.topic = topic;
         me.publicationTime = Instant.now();
 
-        synchronized (lock) {
-            historicEvents.add(me);
-            int toRemove = historicEvents.size() - historySize;
-            for (; toRemove > 0; toRemove--) {
-                historicEvents.poll();
-            }
-            source.publish(me);
+        lock.writeLock().lockInterruptibly();
+        try {
+        	historicEvents.addFirst(me);
+        	int toRemove = historicEvents.size() - historySize;
+        	for (; toRemove > 0; toRemove--) {
+        		historicEvents.removeLast();
+        	}
+        } finally {
+        	lock.writeLock().unlock();
         }
+        source.publish(me);
     }
 
     @Override
@@ -106,60 +116,67 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
     PushEventSource<MonitorEvent> eventSource(int events) {
 
         return pec -> {
-            synchronized (lock) {
+        	List<MonitorEvent> list;
 
-                int size = historicEvents.size();
-                int start = Math.max(0, size - events);
-
-                List<MonitorEvent> list = historicEvents.subList(start, size);
-
-                for (MonitorEvent me : list) {
-                    try {
-                        if (pec.accept(PushEvent.data(me)) < 0) {
-                            return () -> {
-                            };
-                        }
-                    } catch (Exception e) {
-                        return () -> {
-                        };
-                    }
-                }
-                return source.open(pec);
-            }
-
+        	lock.readLock().lockInterruptibly();
+        	try {
+        		int toSend = Math.min(historicEvents.size(), events);
+        		list = new ArrayList<>(historicEvents.subList(0, toSend));
+        	} finally {
+        		lock.readLock().unlock();
+        	}
+        	return pushBackwards(pec, list);
         };
     }
 
     PushEventSource<MonitorEvent> eventSource(Instant since) {
 
         return pec -> {
-            synchronized (lock) {
-
-                ListIterator<MonitorEvent> it = historicEvents.listIterator();
-
-                while (it.hasNext()) {
-                    MonitorEvent next = it.next();
-                    if (next.publicationTime.isAfter(since)) {
-                        it.previous();
-                        break;
-                    }
-                }
-
-                while (it.hasNext()) {
-                    try {
-                        if (pec.accept(PushEvent.data(it.next())) < 0) {
-                            return () -> {
-                            };
-                        }
-                    } catch (Exception e) {
-                        return () -> {
-                        };
-                    }
-                }
-                return source.open(pec);
-            }
-
+        	List<MonitorEvent> list = new ArrayList<>();
+        	lock.readLock().lockInterruptibly();
+        	try {
+        		Iterator<MonitorEvent> it = historicEvents.iterator();
+        		while(it.hasNext()) {
+    				MonitorEvent next = it.next();
+        			if (!next.publicationTime.isAfter(since)) {
+        				break;
+        			} else {
+        				list.add(next);
+        			}
+        		}
+        	} finally {
+        		lock.readLock().unlock();
+        	}
+        	return pushBackwards(pec, list);
         };
     }
 
+	private AutoCloseable pushBackwards(PushEventConsumer<? super MonitorEvent> pec, List<MonitorEvent> list)
+			throws Exception {
+		ListIterator<MonitorEvent> li = list.listIterator(list.size());
+		while (li.hasPrevious()) {
+			try {
+				if (pec.accept(PushEvent.data(li.previous())) < 0) {
+					return () -> {
+					};
+				}
+			} catch (Exception e) {
+				return () -> {
+				};
+			}
+		}
+		return source.open(pec);
+	}
+
+    <T> T copyOfHistory(Function<Stream<MonitorEvent>, T> events) {
+    	lock.readLock().lock();
+    	try {
+    		Stream<MonitorEvent> s = historicEvents.stream();
+    		T t = events.apply(s);
+    		s.close();
+    		return t;
+    	} finally {
+    		lock.readLock().unlock();
+    	}
+    }
 }

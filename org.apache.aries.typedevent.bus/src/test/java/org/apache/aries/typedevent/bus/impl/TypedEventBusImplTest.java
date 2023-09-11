@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mock.Strictness.LENIENT;
 import static org.osgi.framework.Constants.SERVICE_ID;
 import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_FILTER;
+import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_HISTORY;
 import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_TOPICS;
 import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_TYPE;
 import static org.osgi.util.converter.Converters.standardConverter;
@@ -39,6 +40,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatcher;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -730,6 +732,107 @@ public class TypedEventBusImplTest {
         
         assertThrows(IllegalStateException.class, () -> publisher.deliver(event));
         assertThrows(IllegalStateException.class, () -> publisher.deliverUntyped(eventMap));
+    }
+
+    /**
+     * Tests that filtering is applied when delivering historical events
+     * 
+     * @throws InterruptedException
+     */
+    @Test
+    public void testEventHistoryFiltering() throws InterruptedException {
+
+    	TestEvent event = new TestEvent();
+    	event.message = "foo";
+    	
+    	impl.deliver(event);
+    	
+    	event = new TestEvent();
+        event.message = "bar";
+
+        impl.deliver(event);
+        
+        event = new TestEvent();
+        event.message = "foobar";
+
+        impl.deliver(event);
+
+        event = new TestEvent();
+        event.message = "barfoo";
+        
+        impl.deliver(event);
+    	
+    	Map<String, Object> serviceProperties = new HashMap<>();
+
+        serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+        serviceProperties.put(TYPED_EVENT_TYPE, TestEvent.class.getName());
+        serviceProperties.put(TYPED_EVENT_FILTER, "(message=foo*)");
+        serviceProperties.put(TYPED_EVENT_HISTORY, 4);
+        serviceProperties.put(SERVICE_ID, 42L);
+
+        impl.addTypedEventHandler(registeringBundle, handlerA, serviceProperties);
+        
+        assertTrue(semA.tryAcquire(2, 1, TimeUnit.SECONDS));
+        assertFalse(semA.tryAcquire(1, TimeUnit.SECONDS));
+        
+        InOrder order = Mockito.inOrder(handlerA);
+        order.verify(handlerA).notify(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
+                Mockito.argThat(isTestEventWithMessage("foo")));
+        order.verify(handlerA).notify(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
+        		Mockito.argThat(isTestEventWithMessage("foobar")));
+
+        serviceProperties = new HashMap<>();
+
+        serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+        serviceProperties.put(TYPED_EVENT_TYPE, TestEvent.class.getName());
+        serviceProperties.put(TYPED_EVENT_FILTER, "(|(message=bar*)(message=foo*))");
+        serviceProperties.put(TYPED_EVENT_HISTORY, 3);
+        serviceProperties.put(SERVICE_ID, 43L);
+
+        impl.addTypedEventHandler(registeringBundle, handlerB, serviceProperties);
+
+        assertTrue(semB.tryAcquire(3, 1, TimeUnit.SECONDS));
+        assertFalse(semB.tryAcquire(1, TimeUnit.SECONDS));
+        
+        order = Mockito.inOrder(handlerB);
+        order.verify(handlerB).notify(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
+        		Mockito.argThat(isTestEventWithMessage("bar")));
+        order.verify(handlerB).notify(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
+        		Mockito.argThat(isTestEventWithMessage("foobar")));
+        order.verify(handlerB).notify(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
+        		Mockito.argThat(isTestEventWithMessage("barfoo")));
+        
+        serviceProperties = new HashMap<>();
+
+        serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+        serviceProperties.put(TYPED_EVENT_FILTER, "(|(message=foo)(message=bar))");
+        serviceProperties.put(TYPED_EVENT_HISTORY, 4);
+        serviceProperties.put(SERVICE_ID, 44L);
+
+        impl.addUntypedEventHandler(untypedHandlerA, serviceProperties);
+
+        assertTrue(untypedSemA.tryAcquire(2, 1, TimeUnit.SECONDS));
+        assertFalse(untypedSemA.tryAcquire(1, TimeUnit.SECONDS));
+        
+        Mockito.verify(untypedHandlerA).notifyUntyped(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
+        		Mockito.argThat(isUntypedTestEventWithMessage("foo")));
+        Mockito.verify(untypedHandlerA).notifyUntyped(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
+        		Mockito.argThat(isUntypedTestEventWithMessage("bar")));
+
+        serviceProperties = new HashMap<>();
+
+        serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+        serviceProperties.put(TYPED_EVENT_FILTER, "(message=*)");
+        serviceProperties.put(TYPED_EVENT_HISTORY, 1);
+        serviceProperties.put(SERVICE_ID, 45L);
+
+        impl.addUntypedEventHandler(untypedHandlerB, serviceProperties);
+
+        assertTrue(untypedSemB.tryAcquire(1, TimeUnit.SECONDS));
+        assertFalse(untypedSemB.tryAcquire(1, TimeUnit.SECONDS));
+
+        Mockito.verify(untypedHandlerB).notifyUntyped(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
+                Mockito.argThat(isUntypedTestEventWithMessage("barfoo")));
     }
 
     ArgumentMatcher<TestEvent> isTestEventWithMessage(String message) {

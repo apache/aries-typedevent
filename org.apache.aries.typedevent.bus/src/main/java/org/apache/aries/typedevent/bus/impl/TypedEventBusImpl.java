@@ -22,6 +22,7 @@ import static java.util.stream.Collectors.toList;
 import static org.osgi.namespace.implementation.ImplementationNamespace.IMPLEMENTATION_NAMESPACE;
 import static org.osgi.namespace.service.ServiceNamespace.SERVICE_NAMESPACE;
 import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_FILTER;
+import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_HISTORY;
 import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_IMPLEMENTATION;
 import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_SPECIFICATION_VERSION;
 import static org.osgi.util.converter.Converters.standardConverter;
@@ -38,6 +39,7 @@ import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiFunction;
 
 import org.osgi.annotation.bundle.Capability;
 import org.osgi.framework.Bundle;
@@ -136,7 +138,8 @@ public class TypedEventBusImpl implements TypedEventBus {
         
         String defaultTopic = clazz == null ? null : clazz.getName().replace(".", "/");
 
-        doAddEventHandler(topicsToTypedHandlers, wildcardTopicsToTypedHandlers, knownTypedHandlers, handler, defaultTopic, properties);
+        doAddEventHandler(topicsToTypedHandlers, wildcardTopicsToTypedHandlers, knownTypedHandlers, handler, defaultTopic, properties,
+        		(l,i) -> new TypedHistoryReplayTask(monitorImpl, handler, clazz, l, i));
     }
 
     private Class<?> discoverTypeForTypedHandler(Bundle registeringBundle, TypedEventHandler<?> handler, Map<String, Object> properties) {
@@ -205,11 +208,13 @@ public class TypedEventBusImpl implements TypedEventBus {
     }
 
     void addUntypedEventHandler(UntypedEventHandler handler, Map<String, Object> properties) {
-        doAddEventHandler(topicsToUntypedHandlers, wildcardTopicsToUntypedHandlers, knownUntypedHandlers, handler, null, properties);
+        doAddEventHandler(topicsToUntypedHandlers, wildcardTopicsToUntypedHandlers, knownUntypedHandlers, handler, null, properties,
+        		(l,i) -> new UntypedHistoryReplayTask(monitorImpl, handler, l, i));
     }
 
     private <T> void doAddEventHandler(Map<String, Map<T, EventSelector>> map, Map<String, Map<T, EventSelector>> wildcardMap, 
-    		Map<Long, T> idMap, T handler, String defaultTopic, Map<String, Object> properties) {
+    		Map<Long, T> idMap, T handler, String defaultTopic, Map<String, Object> properties,
+    		BiFunction<List<EventSelector>, Integer, ? extends EventTask> historicalEvents) {
 
         Object prop = properties.get(TypedEventConstants.TYPED_EVENT_TOPICS);
 
@@ -246,10 +251,22 @@ public class TypedEventBusImpl implements TypedEventBus {
             return;
         }
 
+        Integer history = 0;
+        prop = properties.get(TYPED_EVENT_HISTORY);
+        if(prop != null) {
+        	try {
+        		history = Integer.parseInt(String.valueOf(prop));
+        	} catch (NumberFormatException nfe) {
+        		// TODO log a bad history property
+        	}
+        }
+        
         synchronized (lock) {
             knownHandlers.put(serviceId, topicList);
             idMap.put(serviceId, handler);
         
+            List<EventSelector> selectors = new ArrayList<>(topicList.size());
+            
             for(String s : topicList) {
             	Map<String, Map<T, EventSelector>> mapToUse;
             	String topicToUse;
@@ -265,6 +282,10 @@ public class TypedEventBusImpl implements TypedEventBus {
             	}
             	Map<T, EventSelector> handlers = mapToUse.computeIfAbsent(topicToUse, x1 -> new HashMap<>());
             	handlers.put(handler, selector);
+            	selectors.add(selector);
+            }
+            if(history > 0) {
+            	queue.add(historicalEvents.apply(selectors, history));
             }
         }
     }
@@ -353,7 +374,13 @@ public class TypedEventBusImpl implements TypedEventBus {
         synchronized (lock) {
             T handler = idToHandler.get(serviceId);
             doRemoveEventHandler(map, idToHandler, handler, serviceId);
-            doAddEventHandler(map, wildcardMap, idToHandler, handler, defaultTopic, properties);
+            doAddEventHandler(map, wildcardMap, idToHandler, handler, defaultTopic, properties,
+            		(a,b) -> new EventTask() {
+						@Override
+						public void notifyListener() {
+							// no-op as history will already have been played
+						}
+					});
         }
     }
 
@@ -457,9 +484,10 @@ public class TypedEventBusImpl implements TypedEventBus {
                 deliveryTasks = unhandledEventHandlers.stream()
                         .map(handler -> new UnhandledEventTask(topic, convertibleEventData, handler)).collect(toList());
             }
+            // This occurs inside the lock to ensure history replay doesn't miss events
+            queue.add(new MonitorEventTask(topic, convertibleEventData, monitorImpl));
         }
 
-        queue.add(new MonitorEventTask(topic, convertibleEventData, monitorImpl));
 
         queue.addAll(deliveryTasks);
     }

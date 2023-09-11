@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -51,7 +52,7 @@ public class EventSelectorTest {
     @ParameterizedTest
     @MethodSource("getTopicMatchingData")
     public void testTopicMatching(String topic, String topicFilter, boolean expectedResult) {
-        assertEquals(expectedResult, new EventSelector(topicFilter, null).matches(topic, null));
+        assertEquals(expectedResult, new EventSelector(topicFilter, null).matches(topic, new HashMap<>()));
     }
     
     /**
