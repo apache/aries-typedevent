@@ -100,7 +100,12 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 
     @Override
     public PushStream<MonitorEvent> monitorEvents(int history) {
-        return psp.buildStream(eventSource(history))
+    	return monitorEvents(history, false);
+    }
+    
+    @Override
+    public PushStream<MonitorEvent> monitorEvents(int history, boolean historyOnly) {
+        return psp.buildStream(eventSource(history, historyOnly))
                 .withBuffer(new ArrayBlockingQueue<>(Math.max(historySize, history)))
                 .withPushbackPolicy(PushbackPolicyOption.FIXED, 0).withQueuePolicy(QueuePolicyOption.FAIL)
                 .withExecutor(monitoringWorker).build();
@@ -108,12 +113,17 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 
     @Override
     public PushStream<MonitorEvent> monitorEvents(Instant history) {
-        return psp.buildStream(eventSource(history)).withBuffer(new ArrayBlockingQueue<>(1024))
+    	return monitorEvents(history, false);
+    }
+    
+    @Override
+    public PushStream<MonitorEvent> monitorEvents(Instant history, boolean historyOnly) {
+        return psp.buildStream(eventSource(history, historyOnly)).withBuffer(new ArrayBlockingQueue<>(1024))
                 .withPushbackPolicy(PushbackPolicyOption.FIXED, 0).withQueuePolicy(QueuePolicyOption.FAIL)
                 .withExecutor(monitoringWorker).build();
     }
 
-    PushEventSource<MonitorEvent> eventSource(int events) {
+    PushEventSource<MonitorEvent> eventSource(int events, boolean historyOnly) {
 
         return pec -> {
         	List<MonitorEvent> list;
@@ -125,11 +135,11 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
         	} finally {
         		lock.readLock().unlock();
         	}
-        	return pushBackwards(pec, list);
+        	return pushBackwards(pec, list, historyOnly);
         };
     }
 
-    PushEventSource<MonitorEvent> eventSource(Instant since) {
+    PushEventSource<MonitorEvent> eventSource(Instant since, boolean historyOnly) {
 
         return pec -> {
         	List<MonitorEvent> list = new ArrayList<>();
@@ -147,11 +157,11 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
         	} finally {
         		lock.readLock().unlock();
         	}
-        	return pushBackwards(pec, list);
+        	return pushBackwards(pec, list, historyOnly);
         };
     }
 
-	private AutoCloseable pushBackwards(PushEventConsumer<? super MonitorEvent> pec, List<MonitorEvent> list)
+	private AutoCloseable pushBackwards(PushEventConsumer<? super MonitorEvent> pec, List<MonitorEvent> list, boolean historyOnly)
 			throws Exception {
 		ListIterator<MonitorEvent> li = list.listIterator(list.size());
 		while (li.hasPrevious()) {
@@ -165,7 +175,14 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 				};
 			}
 		}
-		return source.open(pec);
+		if(historyOnly) {
+			try {
+			pec.accept(PushEvent.close());
+			} catch (Exception e) {}
+			return () -> {};
+		} else {
+			return source.open(pec);
+		}
 	}
 
     <T> T copyOfHistory(Function<Stream<MonitorEvent>, T> events) {

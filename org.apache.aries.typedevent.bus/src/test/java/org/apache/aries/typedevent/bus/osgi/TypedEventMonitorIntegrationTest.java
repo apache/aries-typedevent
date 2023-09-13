@@ -229,6 +229,58 @@ public class TypedEventMonitorIntegrationTest extends AbstractIntegrationTest {
     }
 
     /**
+     * Tests that event history is delivered to the monitor and it
+     * closes the stream after
+     *
+     * @throws InterruptedException
+     * @throws InvocationTargetException
+     */
+    @Test
+    public void testTypedEventMonitorHistory1Close(@InjectService TypedEventMonitor monitor, 
+    		@InjectService TypedEventBus eventBus) throws InterruptedException, InvocationTargetException {
+    	
+    	TestEvent event = new TestEvent();
+    	event.message = "boo";
+    	
+    	eventBus.deliver(event);
+    	
+    	event = new TestEvent();
+    	event.message = "bam";
+    	
+    	eventBus.deliver(event);
+    	
+    	Thread.sleep(500);
+    	
+    	Promise<List<MonitorEvent>> eventsPromise = monitor.monitorEvents(5, true)
+    			.collect(Collectors.toList())
+    			.timeout(2000);
+    	
+    	List<MonitorEvent> events = eventsPromise.getValue();
+    	
+    	assertEquals(2, events.size(), events.toString());
+    	
+    	assertEquals(TEST_EVENT_TOPIC, events.get(0).topic);
+    	assertEquals(TEST_EVENT_TOPIC, events.get(1).topic);
+    	
+    	assertEquals("boo", events.get(0).eventData.get("message"));
+    	assertEquals("bam", events.get(1).eventData.get("message"));
+    	
+    	eventsPromise = monitor.monitorEvents(1, true)
+    			.collect(Collectors.toList())
+    			.timeout(2000);
+    	
+    	events = eventsPromise.getValue();
+    	
+    	assertEquals(1, events.size());
+    	
+    	assertEquals(TEST_EVENT_TOPIC, events.get(0).topic);
+    	
+    	assertEquals("bam", events.get(0).eventData.get("message"));
+    	
+    	
+    }
+
+    /**
      * Tests that event history is delivered to the monitor
      *
      * @throws InterruptedException
@@ -304,6 +356,72 @@ public class TypedEventMonitorIntegrationTest extends AbstractIntegrationTest {
         events = eventsPromise.getValue();
 
         assertTrue(events.isEmpty());
+    }
+
+    /**
+     * Tests that event history is delivered to the monitor and it closes after
+     *
+     * @throws InterruptedException
+     * @throws InvocationTargetException
+     */
+    @Test
+    public void testTypedEventMonitorHistory2Close(@InjectService TypedEventMonitor monitor, 
+    		@InjectService TypedEventBus eventBus) throws InterruptedException, InvocationTargetException {
+    	
+    	Instant beforeFirst = Instant.now().minus(Duration.ofMillis(500));
+    	
+    	TestEvent event = new TestEvent();
+    	event.message = "boo";
+    	
+    	eventBus.deliver(event);
+    	
+    	Instant afterFirst = Instant.now().plus(Duration.ofMillis(500));
+    	
+    	Thread.sleep(1000);
+    	
+    	event = new TestEvent();
+    	event.message = "bam";
+    	
+    	eventBus.deliver(event);
+    	
+    	Instant afterSecond = Instant.now().plus(Duration.ofMillis(500));
+    	
+    	Thread.sleep(600);
+    	
+    	// No stream time limit, this stream should auto-close
+    	Promise<List<MonitorEvent>> eventsPromise = monitor.monitorEvents(beforeFirst, true)
+    			.collect(Collectors.toList())
+    			.timeout(2000);
+    	
+    	List<MonitorEvent> events = eventsPromise.getValue();
+    	
+    	assertEquals(2, events.size());
+    	
+    	assertEquals(TEST_EVENT_TOPIC, events.get(0).topic);
+    	assertEquals(TEST_EVENT_TOPIC, events.get(1).topic);
+    	
+    	assertEquals("boo", events.get(0).eventData.get("message"));
+    	assertEquals("bam", events.get(1).eventData.get("message"));
+    	
+    	eventsPromise = monitor.monitorEvents(afterFirst, true)
+    			.collect(Collectors.toList())
+    			.timeout(2000);
+    	
+    	events = eventsPromise.getValue();
+    	
+    	assertEquals(1, events.size());
+    	
+    	assertEquals(TEST_EVENT_TOPIC, events.get(0).topic);
+    	
+    	assertEquals("bam", events.get(0).eventData.get("message"));
+    	
+    	eventsPromise = monitor.monitorEvents(afterSecond, true)
+    			.collect(Collectors.toList())
+    			.timeout(2000);
+    	
+    	events = eventsPromise.getValue();
+    	
+    	assertTrue(events.isEmpty());
     }
 
 }
