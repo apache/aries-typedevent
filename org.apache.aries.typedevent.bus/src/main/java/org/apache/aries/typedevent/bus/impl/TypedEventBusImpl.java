@@ -271,7 +271,7 @@ public class TypedEventBusImpl implements TypedEventBus {
 
         Long serviceId = getServiceId(properties);
 
-        doRemoveEventHandler(topicsToTypedHandlers, knownTypedHandlers, handler, serviceId);
+        doRemoveEventHandler(topicsToTypedHandlers, wildcardTopicsToTypedHandlers, knownTypedHandlers, handler, serviceId);
 
         synchronized (lock) {
             typedHandlersToTargetClasses.remove(handler);
@@ -282,7 +282,7 @@ public class TypedEventBusImpl implements TypedEventBus {
 
         Long serviceId = getServiceId(properties);
 
-        doRemoveEventHandler(topicsToUntypedHandlers, knownUntypedHandlers, handler, serviceId);
+        doRemoveEventHandler(topicsToUntypedHandlers, wildcardTopicsToUntypedHandlers, knownUntypedHandlers, handler, serviceId);
     }
 
     private Long getServiceId(Map<String, Object> properties) {
@@ -307,14 +307,20 @@ public class TypedEventBusImpl implements TypedEventBus {
         }
     }
 
-    private <T, U> void doRemoveEventHandler(Map<String, Map<T, U>> map, Map<Long, T> idMap, 
+    private <T, U> void doRemoveEventHandler(Map<String, Map<T, U>> map, Map<String, Map<T, U>> wildcardMap, Map<Long, T> idMap, 
             T handler, Long serviceId) {
         synchronized (lock) {
             List<String> consumed = knownHandlers.remove(serviceId);
-            knownHandlers.remove(serviceId);
+            idMap.remove(serviceId);
             if (consumed != null) {
                 consumed.forEach(s -> {
-                    Map<T, ?> handlers = map.get(s);
+                	Map<T, ?> handlers;
+                	if(isWildcard(s)) {
+                		handlers = wildcardMap.get(s.length() == 1 ? "" : s.substring(0, s.length() - 2));
+                	} else {
+                		handlers = map.get(s);
+                	}
+                	
                     if (handlers != null) {
                         handlers.remove(handler);
                         if (handlers.isEmpty()) {
@@ -350,7 +356,7 @@ public class TypedEventBusImpl implements TypedEventBus {
 
         synchronized (lock) {
             T handler = idToHandler.get(serviceId);
-            doRemoveEventHandler(map, idToHandler, handler, serviceId);
+			doRemoveEventHandler(map, wildcardMap, idToHandler, handler, serviceId);
             doAddEventHandler(map, wildcardMap, idToHandler, handler, defaultTopic, properties);
         }
     }

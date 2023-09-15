@@ -18,6 +18,7 @@ package org.apache.aries.typedevent.bus.osgi;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_TOPICS;
 
 import java.util.Dictionary;
 import java.util.HashMap;
@@ -224,6 +225,104 @@ public class EventDeliveryIntegrationTest extends AbstractIntegrationTest {
         assertEquals("foo", received.subEvent.message);
     }
     
-    
+    /**
+     * Tests that events are delivered to untyped Event Handlers
+     * based on topic
+     * 
+     * @throws InterruptedException
+     */
+    @Test
+    public void testEventReceivingUpdateTopic() throws InterruptedException {
+        
+        TestEvent event = new TestEvent();
+        event.message = "boo";
+        
+        Dictionary<String, Object> props = new Hashtable<>();
+        props.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+        
+        regs.add(context.registerService(TypedEventHandler.class, typedEventHandler, props));
+
+        regs.add(context.registerService(UntypedEventHandler.class, untypedEventHandler, props));
+        
+        eventBus.deliver(event);
+        
+        Mockito.verify(typedEventHandler, Mockito.timeout(1000)).notify(
+                Mockito.eq(TEST_EVENT_TOPIC), Mockito.argThat(isTestEventWithMessage("boo")));
+
+        Mockito.verify(untypedEventHandler, Mockito.timeout(1000)).notifyUntyped(
+                Mockito.eq(TEST_EVENT_TOPIC), Mockito.argThat(isUntypedTestEventWithMessage("boo")));
+        
+        Mockito.clearInvocations(typedEventHandler, untypedEventHandler);
+        
+        props.put(TYPED_EVENT_TOPICS, TEST_EVENT_2_TOPIC);
+        
+        regs.forEach(s -> s.setProperties(props));
+        
+        eventBus.deliver(event);
+        
+        Mockito.verify(typedEventHandler, Mockito.after(1000).never()).notify(
+                Mockito.eq(TEST_EVENT_TOPIC), Mockito.any());
+        Mockito.verify(untypedEventHandler, Mockito.after(1000).never()).notifyUntyped(
+        		Mockito.eq(TEST_EVENT_TOPIC), Mockito.any());
+        
+        eventBus.deliver(TEST_EVENT_2_TOPIC, event);
+        
+        Mockito.verify(typedEventHandler, Mockito.timeout(1000)).notify(
+                Mockito.eq(TEST_EVENT_2_TOPIC), Mockito.argThat(isTestEventWithMessage("boo")));
+
+        Mockito.verify(untypedEventHandler, Mockito.timeout(1000)).notifyUntyped(
+                Mockito.eq(TEST_EVENT_2_TOPIC), Mockito.argThat(isUntypedTestEventWithMessage("boo")));
+        
+    }
+
+    /**
+     * Tests that events are delivered to untyped Event Handlers
+     * based on topic
+     * 
+     * @throws InterruptedException
+     */
+    @Test
+    public void testEventReceivingUpdateWildcardTopic() throws InterruptedException {
+    	
+    	TestEvent event = new TestEvent();
+    	event.message = "boo";
+    	
+    	Dictionary<String, Object> props = new Hashtable<>();
+    	props.put(TYPED_EVENT_TOPICS, "foo/bar/*");
+    	
+    	regs.add(context.registerService(TypedEventHandler.class, typedEventHandler, props));
+    	
+    	regs.add(context.registerService(UntypedEventHandler.class, untypedEventHandler, props));
+    	
+    	eventBus.deliver("foo/bar/foobar", event);
+    	
+    	Mockito.verify(typedEventHandler, Mockito.timeout(1000)).notify(
+    			Mockito.eq("foo/bar/foobar"), Mockito.argThat(isTestEventWithMessage("boo")));
+    	
+    	Mockito.verify(untypedEventHandler, Mockito.timeout(1000)).notifyUntyped(
+    			Mockito.eq("foo/bar/foobar"), Mockito.argThat(isUntypedTestEventWithMessage("boo")));
+    	
+    	Mockito.clearInvocations(typedEventHandler, untypedEventHandler);
+    	
+    	props.put(TYPED_EVENT_TOPICS, "foo/bar/foobar/*");
+    	
+    	regs.forEach(s -> s.setProperties(props));
+    	
+    	eventBus.deliver("foo/bar/foobar", event);
+    	
+    	Mockito.verify(typedEventHandler, Mockito.after(1000).never()).notify(
+    			Mockito.eq("foo/bar/foobar"), Mockito.any());
+    	Mockito.verify(untypedEventHandler, Mockito.after(1000).never()).notifyUntyped(
+    			Mockito.eq("foo/bar/foobar"), Mockito.any());
+    	
+    	eventBus.deliver("foo/bar/foobar/fizzbuzz", event);
+    	
+    	Mockito.verify(typedEventHandler, Mockito.timeout(1000)).notify(
+    			Mockito.eq("foo/bar/foobar/fizzbuzz"), Mockito.argThat(isTestEventWithMessage("boo")));
+    	
+    	Mockito.verify(untypedEventHandler, Mockito.timeout(1000)).notifyUntyped(
+    			Mockito.eq("foo/bar/foobar/fizzbuzz"), Mockito.argThat(isUntypedTestEventWithMessage("boo")));
+    	
+    }
     
 }
