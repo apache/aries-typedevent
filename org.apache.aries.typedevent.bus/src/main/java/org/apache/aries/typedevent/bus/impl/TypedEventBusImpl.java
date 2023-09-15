@@ -314,17 +314,20 @@ public class TypedEventBusImpl implements TypedEventBus {
             idMap.remove(serviceId);
             if (consumed != null) {
                 consumed.forEach(s -> {
-                	Map<T, ?> handlers;
+                	Map<String, Map<T, U>> handlers;
+                	String key;
                 	if(isWildcard(s)) {
-                		handlers = wildcardMap.get(s.length() == 1 ? "" : s.substring(0, s.length() - 2));
+                		handlers = wildcardMap;
+                		key = s.length() == 1 ? "" : s.substring(0, s.length() - 2);
                 	} else {
-                		handlers = map.get(s);
+                		handlers = map;
+                		key = s;
                 	}
-                	
-                    if (handlers != null) {
-                        handlers.remove(handler);
-                        if (handlers.isEmpty()) {
-                            map.remove(s);
+                	Map<T,?> subMap = handlers.get(key);
+                    if (subMap != null) {
+                    	subMap.remove(handler);
+                        if (subMap.isEmpty()) {
+                            map.remove(key);
                         }
                     }
                 });
