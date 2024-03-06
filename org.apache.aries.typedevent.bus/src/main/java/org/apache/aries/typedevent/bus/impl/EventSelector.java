@@ -23,8 +23,10 @@ import java.util.function.Predicate;
 
 import org.osgi.framework.Filter;
 
-public class EventSelector {
+public class EventSelector implements Comparable<EventSelector> {
 
+	private final String topicFilter;
+	
 	/** The event filter **/
 	private final Filter filter;
 	
@@ -62,6 +64,7 @@ public class EventSelector {
 	 * @param filter
 	 */
 	public EventSelector(String topic, Filter filter) {
+		this.topicFilter = topic;
 		this.filter = filter;
 		
 		if(topic == null) {
@@ -120,6 +123,10 @@ public class EventSelector {
 		// Must match the topic, and the filter if set
 		return topicMatcher.test(topic) && (filter == null || filter.matches(event));
 	}
+
+	public boolean matchesTopic(String topic) {
+		return topicMatcher.test(topic);
+	}
 	
 	private boolean topicMatch(String topic) {
 		
@@ -158,5 +165,78 @@ public class EventSelector {
 	 */
 	public String getInitial() {
 		return initial;
+	}
+	
+	/**
+	 * Get the topic filter
+	 * @return
+	 */
+	public String getTopicFilter() {
+		return topicFilter;
+	}
+	
+	public boolean isWildcard() {
+		return isMultiLevelWildcard || !additionalSegments.isEmpty();
+	}
+
+	@Override
+	public int compareTo(EventSelector o) {
+		if(isWildcard()) { 
+			if(!o.isWildcard()) {
+				return 1;
+			}
+		} else if(o.isWildcard()) {
+			return -1;
+		} else {
+			return initial.compareTo(o.initial);
+		}
+		
+		int compare = tokenCount(o.initial) - tokenCount(initial);
+		
+		for(int i = 0; compare == 0 && i < additionalSegments.size(); i++) {
+			if(o.additionalSegments.size() > i) {
+				compare = tokenCount(o.additionalSegments.get(i)) - tokenCount(additionalSegments.get(i));
+			} else {
+				// other is out of segments before we are
+				return 1;
+			}
+		}
+		
+		if(compare == 0) {
+			
+			if(o.additionalSegments.size() > additionalSegments.size()) {
+				return -1;
+			}
+			
+			if(isMultiLevelWildcard) {
+				if(!o.isMultiLevelWildcard) {
+					return 1;
+				}
+			} else if(o.isMultiLevelWildcard) {
+				return -1;
+			}
+			
+			compare = initial.compareTo(o.initial);
+			
+			for(int i = 0; compare == 0 && i < additionalSegments.size(); i++) {
+				compare = additionalSegments.get(i).compareTo(o.additionalSegments.get(i));
+			}
+		}
+		
+		return compare;
+	}
+	
+	private int tokenCount(String s) {
+		int count;
+		if("/".equals(s)) {
+			count = 0;
+		} else {
+			count = 1;
+			int idx = 0;
+			while((idx = s.indexOf('/', idx + 1)) > 0) {
+				count++;
+			}
+		}
+		return count;
 	}
 }

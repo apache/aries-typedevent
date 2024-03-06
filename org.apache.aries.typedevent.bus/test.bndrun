@@ -19,7 +19,7 @@
 
 -runfw: org.apache.felix.framework
 
--runee: JavaSE-11
+-runee: JavaSE-17
 
 -runrequires: bnd.identity;id="org.apache.aries.typedevent.bus",\
   bnd.identity;id="org.apache.aries.typedevent.bus-tests",\
@@ -48,6 +48,7 @@
 	org.mockito.mockito-core;version='[5.5.0,5.5.1)',\
 	org.osgi.test.common;version='[1.2.1,1.2.2)',\
 	org.osgi.test.junit5;version='[1.2.1,1.2.2)',\
+	org.osgi.test.junit5.cm;version='[1.2.1,1.2.2)',\
 	ch.qos.logback.classic;version='[1.2.3,1.2.4)',\
 	ch.qos.logback.core;version='[1.2.3,1.2.4)',\
 	org.apache.aries.component-dsl.component-dsl;version='[1.2.2,1.2.3)',\

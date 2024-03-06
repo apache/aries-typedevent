@@ -526,14 +526,14 @@ public class TypedEventBusImpl implements TypedEventBus {
     	return list;
     }
 
-    private static void checkTopicSyntax(String topic) {
+    static void checkTopicSyntax(String topic) {
     	String msg = checkTopicSyntax(topic, false);
     	if(msg != null) {
     		throw new IllegalArgumentException(msg);
     	}
     }
     
-    private static String checkTopicSyntax(String topic, boolean wildcardPermitted) {
+    static String checkTopicSyntax(String topic, boolean wildcardPermitted) {
     	
     	if(topic == null) {
     		throw new IllegalArgumentException("The topic name is not permitted to be null");

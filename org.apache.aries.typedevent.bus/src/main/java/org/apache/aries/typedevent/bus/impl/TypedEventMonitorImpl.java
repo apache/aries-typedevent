@@ -18,17 +18,24 @@
 package org.apache.aries.typedevent.bus.impl;
 
 import java.time.Instant;
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -36,6 +43,7 @@ import org.osgi.annotation.bundle.Capability;
 import org.osgi.namespace.service.ServiceNamespace;
 import org.osgi.service.typedevent.monitor.MonitorEvent;
 import org.osgi.service.typedevent.monitor.TypedEventMonitor;
+import org.osgi.util.function.Predicate;
 import org.osgi.util.pushstream.PushEvent;
 import org.osgi.util.pushstream.PushEventConsumer;
 import org.osgi.util.pushstream.PushEventSource;
@@ -48,6 +56,8 @@ import org.osgi.util.pushstream.SimplePushEventSource;
 @Capability(namespace = ServiceNamespace.SERVICE_NAMESPACE, attribute = "objectClass:List<String>=org.osgi.service.typedevent.monitor.TypedEventMonitor", uses = TypedEventMonitor.class)
 public class TypedEventMonitorImpl implements TypedEventMonitor {
 
+	private static final Entry<Integer, Integer> EMPTY = new SimpleImmutableEntry<>(0,0);
+	
     private final LinkedList<MonitorEvent> historicEvents = new LinkedList<MonitorEvent>();
 
     private final ExecutorService monitoringWorker;
@@ -59,9 +69,18 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
     private final SimplePushEventSource<MonitorEvent> source;
 
     private final int historySize = 1024;
+    
+    private final SortedMap<EventSelector, Entry<Integer, Integer>> historyConfiguration = new TreeMap<>();
+    
+    private final Map<String, TopicHistory> topicsWithRestrictedHistories = new HashMap<>();
 
     TypedEventMonitorImpl(Map<String, ?> props) {
 
+    	Object object = props.get("event.history.enable.at.start");
+    	if(object == null || "true".equals(object.toString())) {
+    		historyConfiguration.put(new EventSelector("*", null), new SimpleImmutableEntry<>(0, Integer.MAX_VALUE));
+    	}
+    	
         monitoringWorker = Executors.newCachedThreadPool();
 
         psp = new PushStreamProvider();
@@ -75,23 +94,56 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
     }
 
     void event(String topic, Map<String, Object> eventData) throws InterruptedException {
-        MonitorEvent me = new MonitorEvent();
-        me.eventData = eventData;
-        me.topic = topic;
-        me.publicationTime = Instant.now();
 
+    	MonitorEvent me = null;
         lock.writeLock().lockInterruptibly();
         try {
-        	historicEvents.addFirst(me);
-        	int toRemove = historicEvents.size() - historySize;
-        	for (; toRemove > 0; toRemove--) {
-        		historicEvents.removeLast();
+        	Entry<Integer, Integer> policy = doGetEffectiveHistoryStorage(topic);
+        	
+        	if(policy.getValue() > 0) {
+				me = getMonitorEvent(topic, eventData);
+        		
+        		historicEvents.addFirst(me);
+
+        		if(policy.getValue() < historySize) {
+        			TopicHistory th = topicsWithRestrictedHistories.computeIfAbsent(topic, 
+        					t -> new TopicHistory(policy.getKey(), policy.getValue()));
+        			MonitorEvent old = th.addEvent(me);
+        			if(old != null) {
+        				historicEvents.remove(old);
+        			}
+        		}
+        		
+
+        		int toRemove = historicEvents.size() - historySize;
+        		if(toRemove > 0) {
+        			Iterator<MonitorEvent> it = historicEvents.descendingIterator();
+        			for (; toRemove > 0 && it.hasNext();) {
+        				MonitorEvent toCheck = it.next();
+        				TopicHistory th = topicsWithRestrictedHistories.get(toCheck.topic);
+        				if(th == null || th.clearEvent(toCheck)) {
+        					it.remove();
+        					toRemove--;
+        				}
+        			}
+        		}
         	}
         } finally {
         	lock.writeLock().unlock();
         }
-        source.publish(me);
+        
+        if(source.isConnected()) {
+        	source.publish(me == null? getMonitorEvent(topic, eventData) : me);
+        }
     }
+
+	private MonitorEvent getMonitorEvent(String topic, Map<String, Object> eventData) {
+		MonitorEvent me = new MonitorEvent();
+		me.eventData = eventData;
+		me.topic = topic;
+		me.publicationTime = Instant.now();
+		return me;
+	}
 
     @Override
     public PushStream<MonitorEvent> monitorEvents() {
@@ -196,4 +248,144 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
     		lock.readLock().unlock();
     	}
     }
+
+	@Override
+	public Predicate<String> topicFilterMatches(String topicFilter) {
+		TypedEventBusImpl.checkTopicSyntax(topicFilter, true);
+		EventSelector selector = new EventSelector(topicFilter, null);
+		return selector::matchesTopic;
+	}
+
+	@Override
+	public boolean topicFilterMatches(String topicName, String topicFilter) {
+		TypedEventBusImpl.checkTopicSyntax(topicFilter, true);
+		TypedEventBusImpl.checkTopicSyntax(topicName);
+		EventSelector selector = new EventSelector(topicFilter, null);
+		return selector.matchesTopic(topicName);
+	}
+
+	@Override
+	public long getMaximumEventStorage() {
+		return historySize;
+	}
+
+	@Override
+	public Map<String, Entry<Integer, Integer>> getConfiguredHistoryStorage() {
+		Map<String, Entry<Integer, Integer>> copy = new LinkedHashMap<>();
+		lock.readLock().lock();
+		try {
+			for (Entry<EventSelector, Entry<Integer, Integer>> e : historyConfiguration.entrySet()) {
+				copy.put(e.getKey().getTopicFilter(), e.getValue());
+			}
+		} finally {
+			lock.readLock().unlock();
+		}
+		return copy;
+	}
+
+	@Override
+	public Entry<Integer, Integer> getConfiguredHistoryStorage(String topicFilter) {
+		TypedEventBusImpl.checkTopicSyntax(topicFilter, true);
+		EventSelector selector = new EventSelector(topicFilter, null);
+		lock.readLock().lock();
+		try {
+			return historyConfiguration.get(selector);
+		} finally {
+			lock.readLock().unlock();
+		}
+	}
+
+	@Override
+	public Entry<Integer, Integer> getEffectiveHistoryStorage(String topicName) {
+		TypedEventBusImpl.checkTopicSyntax(topicName);
+		lock.readLock().lock();
+		try {
+			return doGetEffectiveHistoryStorage(topicName);
+		} finally {
+			lock.readLock().unlock();
+		}
+	}
+
+	private Entry<Integer, Integer> doGetEffectiveHistoryStorage(String topicName) {
+		return historyConfiguration.entrySet().stream()
+				.filter(e -> e.getKey().matchesTopic(topicName))
+				.map(Entry::getValue)
+				.findFirst()
+				.orElse(EMPTY);
+	}
+
+	@Override
+	public int configureHistoryStorage(String topicFilter, int minRequired, int maxRequired) {
+		
+		if(minRequired < 0 || maxRequired < 0) {
+			throw new IllegalArgumentException("The minimum and maxium stored events must be greater than zero");
+		}
+		if(minRequired > maxRequired) {
+			throw new IllegalArgumentException("The minimum stored events must not be greater than the maximum stored events");
+		}
+		
+		if(minRequired > 0) {
+			TypedEventBusImpl.checkTopicSyntax(topicFilter);
+		} else {
+			TypedEventBusImpl.checkTopicSyntax(topicFilter, true);
+		}
+		
+		EventSelector key = new EventSelector(topicFilter, null);
+		Entry<Integer, Integer> val = new SimpleImmutableEntry<>(minRequired, maxRequired);
+		long available;
+		lock.writeLock().lock();
+		try {
+			available = historySize - historyConfiguration.entrySet().stream()
+					.filter(e -> !e.getKey().getTopicFilter().equals(topicFilter))
+					.mapToLong(e -> e.getValue().getKey()).sum();
+			if(available < minRequired) {
+				throw new IllegalStateException("Insufficient space available for " + minRequired + " events");
+			}
+			
+			Entry<Integer, Integer> old = historyConfiguration.put(key, val);
+			if(key.isWildcard()) {
+				if(!val.equals(old)) {
+					
+					Consumer<String> action = (minRequired > 0 || maxRequired < historySize) ?
+							s -> updateRestrictedHistory(s, minRequired, maxRequired) :
+							topicsWithRestrictedHistories::remove;
+					for(Entry<String, TopicHistory> e : topicsWithRestrictedHistories.entrySet()) {
+						if(key.matchesTopic(e.getKey())) {
+							Entry<Integer, Integer> policy = getEffectiveHistoryStorage(e.getKey());
+							if(!e.getValue().policyMatches(policy)) {
+								action.accept(e.getKey());
+							}
+						}
+					}
+				}
+			} else if(minRequired > 0 || maxRequired < historySize){
+				updateRestrictedHistory(topicFilter, minRequired, maxRequired);
+			} else {
+				topicsWithRestrictedHistories.remove(topicFilter);
+			}
+		} finally {
+			lock.writeLock().unlock();
+		}
+		return (int) Math.min(maxRequired, available);
+	}
+
+	private void updateRestrictedHistory(String topicFilter, int minRequired, int maxRequired) {
+		TopicHistory newHistory = new TopicHistory(minRequired, maxRequired);
+		TopicHistory oldHistory = topicsWithRestrictedHistories.put(topicFilter, newHistory);
+		if(oldHistory != null) {
+			List<MonitorEvent> toRemove = newHistory.copyFrom(oldHistory);
+			historicEvents.removeAll(toRemove);
+		}
+	}
+
+	@Override
+	public void removeHistoryStorage(String topicFilter) {
+		EventSelector selector = new EventSelector(topicFilter, null);
+		lock.readLock().lock();
+		try {
+			historyConfiguration.remove(selector);
+		} finally {
+			lock.readLock().unlock();
+		}
+	}
 }
