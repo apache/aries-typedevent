@@ -25,6 +25,7 @@ import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_FILTER
 import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_HISTORY;
 import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_IMPLEMENTATION;
 import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_SPECIFICATION_VERSION;
+import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_TOPICS;
 import static org.osgi.util.converter.Converters.standardConverter;
 
 import java.lang.reflect.ParameterizedType;
@@ -40,6 +41,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 
 import org.osgi.annotation.bundle.Capability;
 import org.osgi.framework.Bundle;
@@ -97,9 +99,16 @@ public class TypedEventBusImpl implements TypedEventBus {
     private final Map<String, Map<UntypedEventHandler, EventSelector>> wildcardTopicsToUntypedHandlers = new HashMap<>();
 
     /**
-     * List access and mutation must be synchronized on {@link #lock}.
+     * Map access and mutation must be synchronized on {@link #lock}. Values from
+     * the map should be copied as the contents are not thread safe.
      */
-    private final List<UnhandledEventHandler> unhandledEventHandlers = new ArrayList<>();
+    private final Map<String, Map<UnhandledEventHandler, EventSelector>> topicsToUnhandledHandlers = new HashMap<>();
+
+    /**
+     * Map access and mutation must be synchronized on {@link #lock}. Values from
+     * the map should be copied as the contents are not thread safe.
+     */
+    private final Map<String, Map<UnhandledEventHandler, EventSelector>> wildcardTopicsToUnhandledHandlers = new HashMap<>();
 
     /**
      * Map access and mutation must be synchronized on {@link #lock}. Values from
@@ -118,6 +127,12 @@ public class TypedEventBusImpl implements TypedEventBus {
      * the map should be copied as the contents are not thread safe.
      */
     private final Map<Long, UntypedEventHandler> knownUntypedHandlers = new HashMap<>();
+
+    /**
+     * Map access and mutation must be synchronized on {@link #lock}. Values from
+     * the map should be copied as the contents are not thread safe.
+     */
+    private final Map<Long, UnhandledEventHandler> knownUnhandledHandlers = new HashMap<>();
 
     private final BlockingQueue<EventTask> queue = new LinkedBlockingQueue<>();
 
@@ -394,15 +409,31 @@ public class TypedEventBusImpl implements TypedEventBus {
     }
 
     void addUnhandledEventHandler(UnhandledEventHandler handler, Map<String, Object> properties) {
-        synchronized (lock) {
-            unhandledEventHandlers.add(handler);
-        }
+    	properties = clearHistoryAndAddTopic(properties);
+    	
+    	doAddEventHandler(topicsToUnhandledHandlers, wildcardTopicsToUnhandledHandlers, knownUnhandledHandlers, handler, null, properties, null);
+    }
+
+	private Map<String, Object> clearHistoryAndAddTopic(Map<String, Object> properties) {
+		if(properties.containsKey(TYPED_EVENT_HISTORY) || !properties.containsKey(TYPED_EVENT_TOPICS)) {
+    		// TODO log warning
+    		properties = new HashMap<>(properties);
+    		properties.remove(TYPED_EVENT_HISTORY);
+    		properties.put(TYPED_EVENT_TOPICS, "*");
+    	}
+		return properties;
+	}
+    
+    void updatedUnhandledEventHandler(Map<String, Object> properties) {
+    	properties = clearHistoryAndAddTopic(properties);
+    	
+        doUpdatedEventHandler(topicsToUnhandledHandlers, wildcardTopicsToUnhandledHandlers, knownUnhandledHandlers, null, properties);
     }
 
     void removeUnhandledEventHandler(UnhandledEventHandler handler, Map<String, Object> properties) {
-        synchronized (lock) {
-            unhandledEventHandlers.remove(handler);
-        }
+    	Long serviceId = getServiceId(properties);
+
+        doRemoveEventHandler(topicsToUnhandledHandlers, wildcardTopicsToUnhandledHandlers, knownUnhandledHandlers, handler, serviceId);
     }
 
     void start() {
@@ -468,19 +499,12 @@ public class TypedEventBusImpl implements TypedEventBus {
             List<EventTask> untypedDeliveries = toUntypedEventTasks(
             		topicsToUntypedHandlers.getOrDefault(topic, emptyMap()), topic, convertibleEventData);
 
-            List<EventTask> wildcardDeliveries = new ArrayList<>();
-            String truncatedTopic = topic;
-            do {
-            	int idx = truncatedTopic.lastIndexOf('/', truncatedTopic.length() - 2);
-            	truncatedTopic = idx > 0 ? truncatedTopic.substring(0, idx + 1) : "";
-            	wildcardDeliveries.addAll(toTypedEventTasks(
-            			wildcardTopicsToTypedHandlers.getOrDefault(truncatedTopic, emptyMap()), 
-            			topic, convertibleEventData));
-            	wildcardDeliveries.addAll(toUntypedEventTasks(
-            			wildcardTopicsToUntypedHandlers.getOrDefault(truncatedTopic, emptyMap()), 
-            			topic, convertibleEventData));
-            } while (truncatedTopic.length() > 0);
-
+            List<EventTask> wildcardDeliveries = findWildcardTasks(topic, convertibleEventData,
+            		s -> toTypedEventTasks(wildcardTopicsToTypedHandlers.getOrDefault(s, emptyMap()), 
+					topic, convertibleEventData),
+            		s -> toUntypedEventTasks(wildcardTopicsToUntypedHandlers.getOrDefault(s, emptyMap()), 
+					topic, convertibleEventData));
+            
             deliveryTasks = new ArrayList<>(typedDeliveries.size() + untypedDeliveries.size() + wildcardDeliveries.size());
 
             deliveryTasks.addAll(typedDeliveries);
@@ -490,16 +514,33 @@ public class TypedEventBusImpl implements TypedEventBus {
             if (deliveryTasks.isEmpty()) {
                 // TODO log properly
                 System.out.println("Unhandled Event Handlers are being used for event sent to topic " + topic);
-                deliveryTasks = unhandledEventHandlers.stream()
-                        .map(handler -> new UnhandledEventTask(topic, convertibleEventData, handler)).collect(toList());
+                deliveryTasks.addAll(toUnhandledEventTasks(topicsToUnhandledHandlers.getOrDefault(topic, emptyMap()), 
+                		topic, convertibleEventData));
+                deliveryTasks.addAll(findWildcardTasks(topic, convertibleEventData, 
+                		s -> toUnhandledEventTasks(wildcardTopicsToUnhandledHandlers.getOrDefault(s, emptyMap()), 
+                				topic, convertibleEventData)));
             }
             // This occurs inside the lock to ensure history replay doesn't miss events
             queue.add(new MonitorEventTask(topic, convertibleEventData, monitorImpl));
         }
 
-
         queue.addAll(deliveryTasks);
     }
+
+	@SafeVarargs
+	private final List<EventTask> findWildcardTasks(String topic, EventConverter convertibleEventData,
+			Function<String, List<? extends EventTask>>... additions) {
+		List<EventTask> wildcardDeliveries = new ArrayList<>();
+		String truncatedTopic = topic;
+		do {
+			int idx = truncatedTopic.lastIndexOf('/', truncatedTopic.length() - 2);
+			truncatedTopic = idx > 0 ? truncatedTopic.substring(0, idx + 1) : "";
+			for(Function<String, List<? extends EventTask>> f : additions) {
+				wildcardDeliveries.addAll(f.apply(truncatedTopic));
+			}
+		} while (truncatedTopic.length() > 0);
+		return wildcardDeliveries;
+	}
     
     private List<EventTask> toTypedEventTasks(Map<TypedEventHandler<?>, EventSelector> map, 
     		String topic, EventConverter convertibleEventData) {
@@ -521,6 +562,18 @@ public class TypedEventBusImpl implements TypedEventBus {
     		if(e.getValue().matches(topic, convertibleEventData)) {
     			UntypedEventHandler handler = e.getKey();
     			list.add(new UntypedEventTask(topic, convertibleEventData, handler));
+    		}
+    	}
+    	return list;
+    }
+
+    private List<EventTask> toUnhandledEventTasks(Map<UnhandledEventHandler, EventSelector> map, 
+    		String topic, EventConverter convertibleEventData) {
+    	List<EventTask> list = new ArrayList<>();
+    	for(Entry<UnhandledEventHandler, EventSelector> e : map.entrySet()) {
+    		if(e.getValue().matches(topic, convertibleEventData)) {
+    			UnhandledEventHandler handler = e.getKey();
+    			list.add(new UnhandledEventTask(topic, convertibleEventData, handler));
     		}
     	}
     	return list;
