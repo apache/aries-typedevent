@@ -66,7 +66,7 @@ public class EventConverter {
     };
     private static final TypeReference<Set<Object>> SET_OF_OBJECTS = new TypeReference<Set<Object>>() {
     };
-    private static final TypeReference<Map<String, Object>> MAP_WITH_STRING_KEYS = new TypeReference<Map<String, Object>>() {
+    static final TypeReference<Map<String, Object>> MAP_WITH_STRING_KEYS = new TypeReference<Map<String, Object>>() {
     };
     private static final TypeReference<Map<Object, Object>> MAP_OF_OBJECT_TO_OBJECT = new TypeReference<Map<Object, Object>>() {
     };
@@ -105,10 +105,16 @@ public class EventConverter {
         specialClasses.add(ZonedDateTime.class);
         specialClasses.add(UUID.class);
 
-        eventConverter = Converters.standardConverter().newConverterBuilder().rule(EventConverter::convert)
+        eventConverter = Converters.standardConverter().newConverterBuilder()
+        		.rule(EventConverter::convertRecord)
+        		.rule(EventConverter::convert)
                 .errorHandler(EventConverter::attemptRecovery).build();
     }
 
+    static Object convertRecord(Object o, Type target) {
+    	return RecordConverter.convert(eventConverter, o, target);
+    }
+    
     /**
      * Conversion for nested Map values
      * @param o - the value to convert

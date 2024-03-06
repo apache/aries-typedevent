@@ -58,7 +58,7 @@
     </repositories>
 
     <properties>
-        <bnd.version>6.4.0</bnd.version>
+        <bnd.version>7.0.0</bnd.version>
         <dsl.version>1.2.2</dsl.version>
         <junit.version>5.10.0</junit.version>
         <mockito.version>5.5.0</mockito.version>
