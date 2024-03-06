@@ -145,6 +145,33 @@
                 <groupId>biz.aQute.bnd</groupId>
                 <artifactId>bnd-run-maven-plugin</artifactId>
             </plugin>
+            <plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>java16-compile</id>
+						<goals>
+							<goal>compile</goal>
+						</goals>
+						<configuration>
+							<compileSourceRoots>${project.basedir}/src/main/java16</compileSourceRoots>
+							<source>16</source>
+							<target>16</target>
+							<release>16</release>
+							<multiReleaseOutput>true</multiReleaseOutput>
+						</configuration>
+					</execution>
+					<execution>
+						<id>default-testCompile</id>
+						<configuration>
+							<source>16</source>
+							<target>16</target>
+							<release>16</release>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
         </plugins>
     </build>
 </project>

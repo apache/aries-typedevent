@@ -154,7 +154,7 @@ public class TypedEventBusImpl implements TypedEventBus {
             }
         } else {
             Class<?> toCheck = handler.getClass();
-            outer: while(clazz == null) {
+            outer: while(clazz == null && toCheck != null) {
                 clazz = findDirectlyImplemented(toCheck);
                 
                 if(clazz != null) {
