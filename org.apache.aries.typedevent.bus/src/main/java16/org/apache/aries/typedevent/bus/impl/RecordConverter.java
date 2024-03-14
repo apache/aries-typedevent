@@ -30,7 +30,7 @@ import org.osgi.util.converter.ConverterFunction;
 
 /**
  * This class is responsible for converting Record events to and from their 
- * "flattened" representations. This version runs on Java 17
+ * "flattened" representations. This version runs on Java 16 and above
  */
 public class RecordConverter {
 

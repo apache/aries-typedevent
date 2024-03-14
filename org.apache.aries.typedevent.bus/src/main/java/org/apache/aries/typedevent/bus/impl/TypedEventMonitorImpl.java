@@ -18,7 +18,6 @@
 package org.apache.aries.typedevent.bus.impl;
 
 import java.time.Instant;
-import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -42,6 +41,7 @@ import java.util.stream.Stream;
 import org.osgi.annotation.bundle.Capability;
 import org.osgi.namespace.service.ServiceNamespace;
 import org.osgi.service.typedevent.monitor.MonitorEvent;
+import org.osgi.service.typedevent.monitor.RangePolicy;
 import org.osgi.service.typedevent.monitor.TypedEventMonitor;
 import org.osgi.util.function.Predicate;
 import org.osgi.util.pushstream.PushEvent;
@@ -56,8 +56,6 @@ import org.osgi.util.pushstream.SimplePushEventSource;
 @Capability(namespace = ServiceNamespace.SERVICE_NAMESPACE, attribute = "objectClass:List<String>=org.osgi.service.typedevent.monitor.TypedEventMonitor", uses = TypedEventMonitor.class)
 public class TypedEventMonitorImpl implements TypedEventMonitor {
 
-	private static final Entry<Integer, Integer> EMPTY = new SimpleImmutableEntry<>(0,0);
-	
     private final LinkedList<MonitorEvent> historicEvents = new LinkedList<MonitorEvent>();
 
     private final ExecutorService monitoringWorker;
@@ -70,7 +68,7 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 
     private final int historySize = 1024;
     
-    private final SortedMap<EventSelector, Entry<Integer, Integer>> historyConfiguration = new TreeMap<>();
+    private final SortedMap<EventSelector, RangePolicy> historyConfiguration = new TreeMap<>();
     
     private final Map<String, TopicHistory> topicsWithRestrictedHistories = new HashMap<>();
 
@@ -78,7 +76,7 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 
     	Object object = props.get("event.history.enable.at.start");
     	if(object == null || "true".equals(object.toString())) {
-    		historyConfiguration.put(new EventSelector("*", null), new SimpleImmutableEntry<>(0, Integer.MAX_VALUE));
+    		historyConfiguration.put(new EventSelector("*", null), RangePolicy.unlimited());
     	}
     	
         monitoringWorker = Executors.newCachedThreadPool();
@@ -98,16 +96,16 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
     	MonitorEvent me = null;
         lock.writeLock().lockInterruptibly();
         try {
-        	Entry<Integer, Integer> policy = doGetEffectiveHistoryStorage(topic);
+        	RangePolicy policy = doGetEffectiveHistoryStorage(topic);
         	
-        	if(policy.getValue() > 0) {
+        	if(policy.getMaximum() > 0) {
 				me = getMonitorEvent(topic, eventData);
         		
         		historicEvents.addFirst(me);
 
-        		if(policy.getValue() < historySize) {
+        		if(policy.getMaximum() < historySize) {
         			TopicHistory th = topicsWithRestrictedHistories.computeIfAbsent(topic, 
-        					t -> new TopicHistory(policy.getKey(), policy.getValue()));
+        					t -> new TopicHistory(policy.getMinimum(), policy.getMaximum()));
         			MonitorEvent old = th.addEvent(me);
         			if(old != null) {
         				historicEvents.remove(old);
@@ -265,16 +263,16 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 	}
 
 	@Override
-	public long getMaximumEventStorage() {
+	public int getMaximumEventStorage() {
 		return historySize;
 	}
 
 	@Override
-	public Map<String, Entry<Integer, Integer>> getConfiguredHistoryStorage() {
-		Map<String, Entry<Integer, Integer>> copy = new LinkedHashMap<>();
+	public Map<String, RangePolicy> getConfiguredHistoryStorage() {
+		Map<String, RangePolicy> copy = new LinkedHashMap<>();
 		lock.readLock().lock();
 		try {
-			for (Entry<EventSelector, Entry<Integer, Integer>> e : historyConfiguration.entrySet()) {
+			for (Entry<EventSelector, RangePolicy> e : historyConfiguration.entrySet()) {
 				copy.put(e.getKey().getTopicFilter(), e.getValue());
 			}
 		} finally {
@@ -284,7 +282,7 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 	}
 
 	@Override
-	public Entry<Integer, Integer> getConfiguredHistoryStorage(String topicFilter) {
+	public RangePolicy getConfiguredHistoryStorage(String topicFilter) {
 		TypedEventBusImpl.checkTopicSyntax(topicFilter, true);
 		EventSelector selector = new EventSelector(topicFilter, null);
 		lock.readLock().lock();
@@ -296,7 +294,7 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 	}
 
 	@Override
-	public Entry<Integer, Integer> getEffectiveHistoryStorage(String topicName) {
+	public RangePolicy getEffectiveHistoryStorage(String topicName) {
 		TypedEventBusImpl.checkTopicSyntax(topicName);
 		lock.readLock().lock();
 		try {
@@ -306,67 +304,61 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 		}
 	}
 
-	private Entry<Integer, Integer> doGetEffectiveHistoryStorage(String topicName) {
+	private RangePolicy doGetEffectiveHistoryStorage(String topicName) {
 		return historyConfiguration.entrySet().stream()
 				.filter(e -> e.getKey().matchesTopic(topicName))
 				.map(Entry::getValue)
 				.findFirst()
-				.orElse(EMPTY);
+				.orElse(RangePolicy.none());
 	}
 
 	@Override
-	public int configureHistoryStorage(String topicFilter, int minRequired, int maxRequired) {
+	public int configureHistoryStorage(String topicFilter, RangePolicy policy) {
 		
-		if(minRequired < 0 || maxRequired < 0) {
-			throw new IllegalArgumentException("The minimum and maxium stored events must be greater than zero");
-		}
-		if(minRequired > maxRequired) {
-			throw new IllegalArgumentException("The minimum stored events must not be greater than the maximum stored events");
-		}
-		
-		if(minRequired > 0) {
+		if(policy.getMinimum() > 0) {
 			TypedEventBusImpl.checkTopicSyntax(topicFilter);
 		} else {
 			TypedEventBusImpl.checkTopicSyntax(topicFilter, true);
 		}
 		
 		EventSelector key = new EventSelector(topicFilter, null);
-		Entry<Integer, Integer> val = new SimpleImmutableEntry<>(minRequired, maxRequired);
+		int min = policy.getMinimum();
+		int max = policy.getMaximum();
 		long available;
 		lock.writeLock().lock();
 		try {
 			available = historySize - historyConfiguration.entrySet().stream()
 					.filter(e -> !e.getKey().getTopicFilter().equals(topicFilter))
-					.mapToLong(e -> e.getValue().getKey()).sum();
-			if(available < minRequired) {
-				throw new IllegalStateException("Insufficient space available for " + minRequired + " events");
+					.mapToInt(e -> e.getValue().getMinimum()).sum();
+			if(available < min) {
+				throw new IllegalStateException("Insufficient space available for " + min + " events");
 			}
 			
-			Entry<Integer, Integer> old = historyConfiguration.put(key, val);
+			RangePolicy old = historyConfiguration.put(key, policy);
 			if(key.isWildcard()) {
-				if(!val.equals(old)) {
+				if(old == null || old.getMinimum() != min || old.getMaximum() != max) {
 					
-					Consumer<String> action = (minRequired > 0 || maxRequired < historySize) ?
-							s -> updateRestrictedHistory(s, minRequired, maxRequired) :
+					Consumer<String> action = (min > 0 || max < historySize) ?
+							s -> updateRestrictedHistory(s, min, max) :
 							topicsWithRestrictedHistories::remove;
 					for(Entry<String, TopicHistory> e : topicsWithRestrictedHistories.entrySet()) {
 						if(key.matchesTopic(e.getKey())) {
-							Entry<Integer, Integer> policy = getEffectiveHistoryStorage(e.getKey());
-							if(!e.getValue().policyMatches(policy)) {
+							RangePolicy effectivePolicy = getEffectiveHistoryStorage(e.getKey());
+							if(!e.getValue().policyMatches(effectivePolicy)) {
 								action.accept(e.getKey());
 							}
 						}
 					}
 				}
-			} else if(minRequired > 0 || maxRequired < historySize){
-				updateRestrictedHistory(topicFilter, minRequired, maxRequired);
+			} else if(min > 0 || max < historySize){
+				updateRestrictedHistory(topicFilter, min, max);
 			} else {
 				topicsWithRestrictedHistories.remove(topicFilter);
 			}
 		} finally {
 			lock.writeLock().unlock();
 		}
-		return (int) Math.min(maxRequired, available);
+		return (int) Math.min(max, available);
 	}
 
 	private void updateRestrictedHistory(String topicFilter, int minRequired, int maxRequired) {

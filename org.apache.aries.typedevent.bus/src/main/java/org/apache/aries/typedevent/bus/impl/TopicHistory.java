@@ -21,9 +21,9 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
-import java.util.Map.Entry;
 
 import org.osgi.service.typedevent.monitor.MonitorEvent;
+import org.osgi.service.typedevent.monitor.RangePolicy;
 
 public class TopicHistory {
     private final int minRequired;
@@ -55,8 +55,8 @@ public class TopicHistory {
 		}
 	}
 	
-	public boolean policyMatches(Entry<Integer, Integer> policy) {
-		return policy.getKey().intValue() == minRequired && policy.getValue().intValue() == maxRequired;
+	public boolean policyMatches(RangePolicy policy) {
+		return policy.getMinimum() == minRequired && policy.getMaximum() == maxRequired;
 	}
 
 	public List<MonitorEvent> copyFrom(TopicHistory oldHistory) {

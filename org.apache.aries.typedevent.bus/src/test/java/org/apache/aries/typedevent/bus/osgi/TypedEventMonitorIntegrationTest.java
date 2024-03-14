@@ -27,7 +27,6 @@ import java.util.Arrays;
 import java.util.Dictionary;
 import java.util.Hashtable;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.stream.Collectors;
 
 import org.apache.aries.typedevent.bus.common.TestEvent;
@@ -46,6 +45,7 @@ import org.osgi.framework.BundleContext;
 import org.osgi.service.typedevent.TypedEventBus;
 import org.osgi.service.typedevent.TypedEventHandler;
 import org.osgi.service.typedevent.monitor.MonitorEvent;
+import org.osgi.service.typedevent.monitor.RangePolicy;
 import org.osgi.service.typedevent.monitor.TypedEventMonitor;
 import org.osgi.test.common.annotation.InjectBundleContext;
 import org.osgi.test.common.annotation.InjectService;
@@ -439,9 +439,9 @@ public class TypedEventMonitorIntegrationTest extends AbstractIntegrationTest {
     public void testTopicConfig(@InjectService TypedEventMonitor monitor, 
     		@InjectService TypedEventBus eventBus) throws Exception {
     	
-    	Entry<Integer, Integer> historyStorage = monitor.getEffectiveHistoryStorage(TEST_EVENT_TOPIC);
-    	assertEquals(0, historyStorage.getKey());
-    	assertEquals(0, historyStorage.getValue());
+    	RangePolicy historyStorage = monitor.getEffectiveHistoryStorage(TEST_EVENT_TOPIC);
+    	assertEquals(0, historyStorage.getMinimum());
+    	assertEquals(0, historyStorage.getMaximum());
     	
     	TestEvent event = new TestEvent();
         event.message = "boo";
@@ -462,7 +462,7 @@ public class TypedEventMonitorIntegrationTest extends AbstractIntegrationTest {
         List<MonitorEvent> events = eventsPromise.getValue();
         assertTrue(events.isEmpty());
         
-        monitor.configureHistoryStorage(TEST_EVENT_TOPIC, 0, 1);
+        monitor.configureHistoryStorage(TEST_EVENT_TOPIC, RangePolicy.atMost(1));
         
         event = new TestEvent();
         event.message = "boo";
@@ -495,8 +495,8 @@ public class TypedEventMonitorIntegrationTest extends AbstractIntegrationTest {
     public void testMinimumRetention(@InjectService TypedEventMonitor monitor, 
     		@InjectService TypedEventBus eventBus) throws Exception {
     	
-    	monitor.configureHistoryStorage(TEST_EVENT_TOPIC, 3, 5);
-    	monitor.configureHistoryStorage("*", 0, Integer.MAX_VALUE);
+    	monitor.configureHistoryStorage(TEST_EVENT_TOPIC, RangePolicy.range(3, 5));
+    	monitor.configureHistoryStorage("*", RangePolicy.unlimited());
 
     	TestEvent event = new TestEvent();
         event.message = "boo";
@@ -574,7 +574,7 @@ public class TypedEventMonitorIntegrationTest extends AbstractIntegrationTest {
         assertEquals("bar", events.get(1).eventData.get("message"));
         assertEquals("foobar", events.get(2).eventData.get("message"));
         
-        monitor.configureHistoryStorage(TEST_EVENT_TOPIC, 1, 2);
+        monitor.configureHistoryStorage(TEST_EVENT_TOPIC, RangePolicy.range(1, 2));
         
         eventsPromise = monitor.monitorEvents((int) maximumEventStorage + 100, true)
                 .collect(Collectors.toList())
