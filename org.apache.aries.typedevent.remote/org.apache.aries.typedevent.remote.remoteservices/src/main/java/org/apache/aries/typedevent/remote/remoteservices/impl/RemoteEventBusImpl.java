@@ -41,14 +41,14 @@ import org.osgi.framework.FrameworkUtil;
 import org.osgi.framework.InvalidSyntaxException;
 import org.osgi.framework.ServiceRegistration;
 import org.osgi.service.typedevent.TypedEventBus;
-import org.osgi.service.typedevent.annotations.RequireTypedEvents;
+import org.osgi.service.typedevent.annotations.RequireTypedEvent;
 
 /**
  * This class implements {@link RemoteEventBus} and is responsible for receiving
  * events from remote frameworks and publishing them in the local framework
  */
 @Capability(namespace=SERVICE_NAMESPACE, attribute="objectClass:List<String>=org.apache.aries.typedevent.remote.remoteservices.spi.RemoteEventBus", uses=RemoteEventBus.class)
-@RequireTypedEvents
+@RequireTypedEvent
 public class RemoteEventBusImpl implements RemoteEventBus {
     
     private final TypedEventBus eventBus;
