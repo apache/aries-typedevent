@@ -19,7 +19,7 @@
 
 -runfw: org.apache.felix.framework
 
--runee: JavaSE-11
+-runee: JavaSE-17
 
 -runrequires: bnd.identity;id="org.apache.aries.typedevent.bus",\
   bnd.identity;id="org.apache.aries.typedevent.bus-tests",\
@@ -39,8 +39,6 @@
 	junit-jupiter-api;version='[5.10.0,5.10.1)',\
 	junit-platform-commons;version='[1.10.0,1.10.1)',\
 	junit-jupiter-engine;version='[5.10.0,5.10.1)',\
-	org.apache.aries.typedevent.bus;version='[0.0.2,0.0.3)',\
-	org.apache.aries.typedevent.bus-tests;version='[0.0.2,0.0.3)',\
 	junit-platform-engine;version='[1.10.0,1.10.1)',\
 	junit-platform-launcher;version='[1.10.0,1.10.1)',\
 	org.objenesis;version='[3.3.0,3.3.1)',\
@@ -55,4 +53,7 @@
 	ch.qos.logback.core;version='[1.2.3,1.2.4)',\
 	org.apache.aries.component-dsl.component-dsl;version='[1.2.2,1.2.3)',\
 	org.apache.felix.configadmin;version='[1.9.26,1.9.27)',\
-	slf4j.api;version='[1.7.30,1.7.31)'
+	slf4j.api;version='[1.7.30,1.7.31)',\
+	org.apache.aries.typedevent.bus;version='[0.0.3,0.0.4)',\
+	org.apache.aries.typedevent.bus-tests;version='[0.0.3,0.0.4)',\
+	org.mockito.junit-jupiter;version='[5.5.0,5.5.1)'
