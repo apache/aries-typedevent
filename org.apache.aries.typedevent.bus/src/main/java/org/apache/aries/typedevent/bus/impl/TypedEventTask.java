@@ -21,13 +21,13 @@ import org.osgi.service.typedevent.TypedEventHandler;
 
 class TypedEventTask extends EventTask {
     private final String topic;
-    private final Class<?> targetEventClass;
+    private final TypeData targetEventClass;
     private final EventConverter eventData;
     private final TypedEventHandler<Object> eventProcessor;
 
     @SuppressWarnings("unchecked")
     public TypedEventTask(String topic, EventConverter eventData, TypedEventHandler<?> eventProcessor,
-            Class<?> targetEventClass) {
+            TypeData targetEventClass) {
         super();
         this.topic = topic;
         this.targetEventClass = targetEventClass;
