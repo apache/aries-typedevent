@@ -38,6 +38,7 @@ import java.util.stream.Collectors;
 
 import org.apache.aries.component.dsl.OSGi;
 import org.apache.aries.component.dsl.OSGiResult;
+import org.apache.aries.typedevent.bus.spi.AriesTypedEvents;
 import org.osgi.annotation.bundle.Header;
 import org.osgi.framework.BundleActivator;
 import org.osgi.framework.BundleContext;
@@ -123,7 +124,9 @@ public class TypedEventBusActivator implements BundleActivator {
                                                                     getServiceProps(csr.getServiceReference())),
                                                          handler -> tebi.removeUnhandledEventHandler(handler,
                                                                     getServiceProps(csr.getServiceReference())))),
-                                register(TypedEventBus.class, tebi, serviceProps)
+                                register(new String[] { 
+                        				TypedEventBus.class.getName(), AriesTypedEvents.class.getName()
+                        			}, tebi, serviceProps)
                                         .flatMap(x -> nothing())));
 
 
