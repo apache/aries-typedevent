@@ -43,6 +43,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import org.apache.aries.typedevent.bus.spi.CustomEventConverter;
 import org.osgi.framework.Filter;
 import org.osgi.util.converter.Converter;
 import org.osgi.util.converter.ConverterFunction;
@@ -194,24 +195,27 @@ public class EventConverter {
     }
 
     private final Object originalEvent;
+    private final CustomEventConverter custom;
 
     private Map<String, ?> untypedEventDataForFiltering;
 
-    private EventConverter(Object event) {
+    private EventConverter(Object event, CustomEventConverter custom) {
         this.originalEvent = event;
+		this.custom = custom;
     }
 
-    private EventConverter(Map<String, ?> untypedEvent) {
+    private EventConverter(Map<String, ?> untypedEvent, CustomEventConverter custom) {
         this.originalEvent = untypedEvent;
+        this.custom = custom;
         this.untypedEventDataForFiltering = untypedEvent;
     }
 
-    public static EventConverter forTypedEvent(Object event) {
-        return new EventConverter(event);
+    public static EventConverter forTypedEvent(Object event, CustomEventConverter custom) {
+        return new EventConverter(event, custom);
     }
 
-    public static EventConverter forUntypedEvent(Map<String, ?> event) {
-        return new EventConverter(event);
+    public static EventConverter forUntypedEvent(Map<String, ?> event, CustomEventConverter custom) {
+        return new EventConverter(event, custom);
     }
 
     public boolean applyFilter(Filter f) {
@@ -227,16 +231,28 @@ public class EventConverter {
 
     public Map<String, ?> toUntypedEvent() {
         if (untypedEventDataForFiltering == null) {
-            untypedEventDataForFiltering = eventConverter.convert(originalEvent).sourceAsDTO().to(MAP_WITH_STRING_KEYS);
+        	if(custom == null || 
+        			(untypedEventDataForFiltering = custom.toUntypedEvent(originalEvent)) == null ) {
+        		untypedEventDataForFiltering = eventConverter.convert(originalEvent).sourceAsDTO().to(MAP_WITH_STRING_KEYS);
+        	}
         }
         return untypedEventDataForFiltering;
     }
 
-    public <T> T toTypedEvent(Class<T> clazz) {
-        if (clazz.isInstance(originalEvent)) {
-            return clazz.cast(originalEvent);
+    @SuppressWarnings("unchecked")
+	public <T> T toTypedEvent(TypeData targetEventClass) {
+        Class<?> rawType = targetEventClass.getRawType();
+        Type genericTarget = targetEventClass.getType();
+		if (rawType.isInstance(originalEvent) && rawType == genericTarget) {
+            return (T) originalEvent;
         } else {
-            return eventConverter.convert(originalEvent).targetAsDTO().to(clazz);
+        	if(custom != null) {
+				Object result = custom.toTypedEvent(originalEvent, rawType, genericTarget);
+				if(result != null) {
+					return (T) result;
+				}
+        	}
+            return eventConverter.convert(originalEvent).targetAsDTO().to(genericTarget);
         }
     }
 

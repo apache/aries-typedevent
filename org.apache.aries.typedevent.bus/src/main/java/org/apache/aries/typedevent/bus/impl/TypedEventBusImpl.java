@@ -29,6 +29,7 @@ import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_TOPICS
 import static org.osgi.util.converter.Converters.standardConverter;
 
 import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -43,6 +44,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
+import org.apache.aries.typedevent.bus.spi.AriesTypedEvents;
+import org.apache.aries.typedevent.bus.spi.CustomEventConverter;
 import org.osgi.annotation.bundle.Capability;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.Constants;
@@ -59,7 +62,7 @@ import org.osgi.util.converter.TypeReference;
 
 @Capability(namespace=SERVICE_NAMESPACE, attribute="objectClass:List<String>=org.osgi.service.typedevent.TypedEventBus", uses=TypedEventBus.class)
 @Capability(namespace=IMPLEMENTATION_NAMESPACE, name=TYPED_EVENT_IMPLEMENTATION, version=TYPED_EVENT_SPECIFICATION_VERSION, uses=TypedEventBus.class)
-public class TypedEventBusImpl implements TypedEventBus {
+public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
 
     private static final TypeReference<List<String>> LIST_OF_STRINGS = new TypeReference<List<String>>() {
     };
@@ -84,7 +87,7 @@ public class TypedEventBusImpl implements TypedEventBus {
      * Map access and mutation must be synchronized on {@link #lock}. Values from
      * the map should be copied as the contents are not thread safe.
      */
-    private final Map<TypedEventHandler<?>, Class<?>> typedHandlersToTargetClasses = new HashMap<>();
+    private final Map<TypedEventHandler<?>, TypeData> typedHandlersToTargetClasses = new HashMap<>();
 
     /**
      * Map access and mutation must be synchronized on {@link #lock}. Values from
@@ -144,41 +147,59 @@ public class TypedEventBusImpl implements TypedEventBus {
 
     private final Object threadLock = new Object();
 
+    /**
+     * Access and mutation must be synchronized on {@link #lock}.
+     */
+	private CustomEventConverter customEventConverter;
+
     public TypedEventBusImpl(TypedEventMonitorImpl monitorImpl, Map<String, ?> config) {
         this.monitorImpl = monitorImpl;
     }
 
-    void addTypedEventHandler(Bundle registeringBundle, TypedEventHandler<?> handler, Map<String, Object> properties) {
-        Class<?> clazz = discoverTypeForTypedHandler(registeringBundle, handler, properties);
-        
-        String defaultTopic = clazz == null ? null : clazz.getName().replace(".", "/");
-
-        doAddEventHandler(topicsToTypedHandlers, wildcardTopicsToTypedHandlers, knownTypedHandlers, handler, defaultTopic, properties,
-        		(l,i) -> new TypedHistoryReplayTask(monitorImpl, handler, clazz, l, i));
+    public void registerGlobalEventConverter(CustomEventConverter converter, boolean force) {
+    	synchronized (lock) {
+    		if(customEventConverter != null && !force) {
+    			throw new IllegalStateException("A custom converter is already set");
+    		}
+    		customEventConverter = converter;
+		}
     }
 
-    private Class<?> discoverTypeForTypedHandler(Bundle registeringBundle, TypedEventHandler<?> handler, Map<String, Object> properties) {
-        Class<?> clazz = null;
+    void addTypedEventHandler(Bundle registeringBundle, TypedEventHandler<?> handler, Map<String, Object> properties) {
+        TypeData genType = discoverTypeForTypedHandler(registeringBundle, handler, properties);
+        
+        String defaultTopic = genType == null ? null : genType.getRawType().getName().replace(".", "/");
+
+        // This function must only ever be called while holding #lock
+        BiFunction<List<EventSelector>, Integer, ? extends EventTask> replayTaskFactory = 
+        		(l,i) -> new TypedHistoryReplayTask(monitorImpl, customEventConverter, handler, genType, l, i);
+        
+		doAddEventHandler(topicsToTypedHandlers, wildcardTopicsToTypedHandlers, knownTypedHandlers, handler, defaultTopic, properties,
+        		replayTaskFactory);
+    }
+
+    private TypeData discoverTypeForTypedHandler(Bundle registeringBundle, TypedEventHandler<?> handler, Map<String, Object> properties) {
+        Type genType = null;
         Object type = properties.get(TypedEventConstants.TYPED_EVENT_TYPE);
         if (type != null) {
             try {
-                 clazz = registeringBundle.loadClass(String.valueOf(type));
+                 genType = registeringBundle.loadClass(String.valueOf(type));
             } catch (ClassNotFoundException e) {
                 // TODO Blow up
                 e.printStackTrace();
             }
         } else {
             Class<?> toCheck = handler.getClass();
-            outer: while(clazz == null && toCheck != null) {
-                clazz = findDirectlyImplemented(toCheck);
+            outer: while(genType == null && toCheck != null) {
+            	genType = findDirectlyImplemented(toCheck);
                 
-                if(clazz != null) {
+                if(genType != null) {
                     break outer;
                 }
                 
-                clazz = processInterfaceHierarchyForClass(toCheck);
+                genType = processInterfaceHierarchyForClass(toCheck);
 
-                if(clazz != null) {
+                if(genType != null) {
                     break outer;
                 }
                 
@@ -186,40 +207,42 @@ public class TypedEventBusImpl implements TypedEventBus {
             }
         }
 
-        if (clazz != null) {
+        if (genType != null) {
+        	TypeData typeData = new TypeData(genType);
             synchronized (lock) {
-                typedHandlersToTargetClasses.put(handler, clazz);
+				typedHandlersToTargetClasses.put(handler, typeData);
             }
+            return typeData;
         } else {
-            // TODO Blow Up
+            // TODO log
+        	throw new IllegalArgumentException("Unable to determine handled type for " + handler);
         }
-        return clazz;
     }
 
-    private Class<?> processInterfaceHierarchyForClass(Class<?> toCheck) {
-        Class<?> clazz = null;
+    private Type processInterfaceHierarchyForClass(Class<?> toCheck) {
+        Type type = null;
         for (Class<?> iface : toCheck.getInterfaces()) {
-            clazz = findDirectlyImplemented(iface);
+            type = findDirectlyImplemented(iface);
             
-            if(clazz != null) {
+            if(type != null) {
                 break;
             }
             
-            clazz = processInterfaceHierarchyForClass(iface); 
+            type = processInterfaceHierarchyForClass(iface); 
 
-            if(clazz != null) {
+            if(type != null) {
                 break;
             }
         }
-        return clazz;
+        return type;
     }
 
-    private Class<?> findDirectlyImplemented(Class<?> toCheck) {
+    private Type findDirectlyImplemented(Class<?> toCheck) {
         return Arrays.stream(toCheck.getGenericInterfaces())
             .filter(ParameterizedType.class::isInstance)
             .map(ParameterizedType.class::cast)
             .filter(t -> TypedEventHandler.class.equals(t.getRawType())).map(t -> t.getActualTypeArguments()[0])
-            .findFirst().map(Class.class::cast).orElse(null);
+            .findFirst().orElse(null);
     }
 
     void addUntypedEventHandler(UntypedEventHandler handler, Map<String, Object> properties) {
@@ -380,9 +403,9 @@ public class TypedEventBusImpl implements TypedEventBus {
             handler = knownTypedHandlers.get(serviceId);
         }
         
-        Class<?> clazz = discoverTypeForTypedHandler(registeringBundle, handler, properties);
+        TypeData genType = discoverTypeForTypedHandler(registeringBundle, handler, properties);
         
-        String defaultTopic = clazz == null ? null : clazz.getName().replace(".", "/");
+        String defaultTopic = genType == null ? null : genType.getRawType().getName().replace(".", "/");
         
         doUpdatedEventHandler(topicsToTypedHandlers, wildcardTopicsToTypedHandlers, knownTypedHandlers, defaultTopic, properties);
     }
@@ -478,21 +501,25 @@ public class TypedEventBusImpl implements TypedEventBus {
     public void deliver(String topic, Object event) {
     	checkTopicSyntax(topic);
     	Objects.requireNonNull(event, "The event object must not be null");
-        deliver(topic, EventConverter.forTypedEvent(event));
+        deliver(topic, event, EventConverter::forTypedEvent);
     }
 
     @Override
     public void deliverUntyped(String topic, Map<String, ?> eventData) {
     	checkTopicSyntax(topic);
     	Objects.requireNonNull(eventData, "The event object must not be null");
-        deliver(topic, EventConverter.forUntypedEvent(eventData));
+        deliver(topic, eventData, EventConverter::forUntypedEvent);
     }
 
-    private void deliver(String topic, EventConverter convertibleEventData) {
+    private <T> void deliver(String topic, T event, 
+    		BiFunction<T, CustomEventConverter, EventConverter> eventConversionFactory) {
 
         List<EventTask> deliveryTasks;
 
+        EventConverter convertibleEventData;
         synchronized (lock) {
+			convertibleEventData = eventConversionFactory.apply(event, customEventConverter);
+        	
         	List<EventTask> typedDeliveries = toTypedEventTasks(
         			topicsToTypedHandlers.getOrDefault(topic, emptyMap()), topic, convertibleEventData);
 
@@ -728,13 +755,13 @@ public class TypedEventBusImpl implements TypedEventBus {
 		@Override
 		public void deliver(T event) {
 			checkOpen();
-			TypedEventBusImpl.this.deliver(topic, EventConverter.forTypedEvent(event));
+			TypedEventBusImpl.this.deliver(topic, event, EventConverter::forTypedEvent);
 		}
 
 		@Override
 		public void deliverUntyped(Map<String, ?> event) {
 			checkOpen();
-			TypedEventBusImpl.this.deliver(topic, EventConverter.forUntypedEvent(event));
+			TypedEventBusImpl.this.deliver(topic, event, EventConverter::forUntypedEvent);
 		}
 
 		@Override

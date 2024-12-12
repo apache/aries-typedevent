@@ -30,6 +30,9 @@ import org.apache.aries.typedevent.bus.common.TestEvent2;
 import org.apache.aries.typedevent.bus.common.TestEvent2.EventType;
 import org.apache.aries.typedevent.bus.common.TestEvent2Consumer;
 import org.apache.aries.typedevent.bus.common.TestEventConsumer;
+import org.apache.aries.typedevent.bus.spi.AriesTypedEvents;
+import org.apache.aries.typedevent.bus.spi.CustomEventConverter;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -72,6 +75,14 @@ public class EventDeliveryIntegrationTest extends AbstractIntegrationTest {
 
     @Mock
     UntypedEventHandler untypedEventHandler, untypedEventHandler2;
+    
+    @Mock
+    CustomEventConverter customConverter;
+
+    @AfterEach
+    public void stop() throws Exception {
+    	((AriesTypedEvents) eventBus).registerGlobalEventConverter(null, true);
+    }
     
     /**
      * Tests that events are delivered to untyped Event Handlers
@@ -360,6 +371,43 @@ public class EventDeliveryIntegrationTest extends AbstractIntegrationTest {
     	Mockito.verify(untypedEventHandler, Mockito.timeout(1000)).notifyUntyped(
     			Mockito.eq("foo/bar/foobar/fizzbuzz"), Mockito.argThat(isUntypedTestEventWithMessage("boo")));
     	
+    }
+    
+    /**
+     * Tests that events are delivered to untyped Event Handlers
+     * based on topic
+     * 
+     * @throws InterruptedException
+     */
+    @Test
+    public void testCustomEventReceiving() throws InterruptedException {
+        
+        TestEvent event = new TestEvent();
+        event.message = "boo";
+        
+        ((AriesTypedEvents) eventBus).registerGlobalEventConverter(customConverter);
+        
+        Mockito.when(customConverter.toUntypedEvent(event)).thenReturn(Map.of("message", "BOO"));
+        		
+        Dictionary<String, Object> props = new Hashtable<>();
+        props.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+        
+        regs.add(context.registerService(UntypedEventHandler.class, untypedEventHandler, props));
+        
+        props = new Hashtable<>();
+        
+        props.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_2_TOPIC);
+        
+        regs.add(context.registerService(UntypedEventHandler.class, untypedEventHandler2, props));
+        
+        eventBus.deliver(event);
+        
+        Mockito.verify(untypedEventHandler, Mockito.timeout(1000)).notifyUntyped(
+                Mockito.eq(TEST_EVENT_TOPIC), Mockito.argThat(isUntypedTestEventWithMessage("BOO")));
+
+        Mockito.verify(untypedEventHandler2, Mockito.after(1000).never()).notifyUntyped(
+                Mockito.eq(TEST_EVENT_TOPIC), Mockito.argThat(isUntypedTestEventWithMessage("BOO")));
+        		
     }
     
 }

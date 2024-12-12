@@ -18,24 +18,29 @@ package org.apache.aries.typedevent.bus.impl;
 
 import java.util.List;
 
+import org.apache.aries.typedevent.bus.spi.CustomEventConverter;
 import org.osgi.service.typedevent.TypedEventHandler;
 import org.osgi.service.typedevent.monitor.MonitorEvent;
 
 public class TypedHistoryReplayTask extends HistoryReplayTask {
 
+	private final CustomEventConverter customEventConverter;
 	private final TypedEventHandler<Object> handler;
-	private final Class<?> eventType;
+	private final TypeData eventType;
 
 	@SuppressWarnings("unchecked")
-	public TypedHistoryReplayTask(TypedEventMonitorImpl monitorImpl, TypedEventHandler<?> handler, Class<?> eventType, List<EventSelector> selectors, Integer history) {
+	public TypedHistoryReplayTask(TypedEventMonitorImpl monitorImpl, 
+			CustomEventConverter customEventConverter, TypedEventHandler<?> handler, 
+			TypeData eventType, List<EventSelector> selectors, Integer history) {
 		super(monitorImpl, selectors, history);
+		this.customEventConverter = customEventConverter;
 		this.handler = (TypedEventHandler<Object>) handler;
 		this.eventType = eventType;
 	}
 
 	@Override
 	protected void notifyListener(MonitorEvent me) {
-		handler.notify(me.topic, (Object) EventConverter.forUntypedEvent(me.eventData).toTypedEvent(eventType));
+		handler.notify(me.topic, (Object) EventConverter.forUntypedEvent(me.eventData, customEventConverter).toTypedEvent(eventType));
 	}
 
 }
