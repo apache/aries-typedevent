@@ -49,6 +49,8 @@ import org.osgi.util.converter.Converter;
 import org.osgi.util.converter.ConverterFunction;
 import org.osgi.util.converter.Converters;
 import org.osgi.util.converter.TypeReference;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class is responsible for converting events to and from their "flattened"
@@ -58,6 +60,8 @@ import org.osgi.util.converter.TypeReference;
  */
 public class EventConverter {
 
+	private static final Logger _log = LoggerFactory.getLogger(EventConverter.class);
+	
     private static final TypeReference<List<Object>> LIST_OF_OBJECTS = new TypeReference<List<Object>>() {
     };
     private static final TypeReference<Set<Object>> SET_OF_OBJECTS = new TypeReference<Set<Object>>() {
@@ -105,6 +109,12 @@ public class EventConverter {
                 .errorHandler(EventConverter::attemptRecovery).build();
     }
 
+    /**
+     * Conversion for nested Map values
+     * @param o - the value to convert
+     * @param target - the target - should be Object.class
+     * @return
+     */
     static Object convert(Object o, Type target) {
 
         if (target != Object.class || o == null) {
@@ -115,11 +125,17 @@ public class EventConverter {
 
         // "Safe" classes use an identity transform
         if (safeClasses.contains(sourceClass)) {
+        	if(_log.isDebugEnabled()) {
+        		_log.debug("The object {} does not require conversion.", o);
+        	}
             return o;
         }
 
         // "Special" types and Enums map to strings
         if (specialClasses.contains(sourceClass) || sourceClass.isEnum()) {
+        	if(_log.isDebugEnabled()) {
+        		_log.debug("The object {} will be mapped as a String.", o);
+        	}
             return eventConverter.convert(o).sourceAs(Object.class).to(String.class);
         }
 
@@ -127,6 +143,9 @@ public class EventConverter {
         // the relevant collection type containing objects, this
         // ensures we pick up any embedded lists of DTOs or enums
         if (o instanceof Collection) {
+        	if(_log.isDebugEnabled()) {
+        		_log.debug("The collection {} will be processed to map the contained objects.", o);
+        	}
             if (o instanceof Set) {
                 return eventConverter.convert(o).to(SET_OF_OBJECTS);
             } else {
@@ -137,10 +156,16 @@ public class EventConverter {
         // As with collections we remap nested maps to clean up any
         // undesirable types in the keys or values
         if (o instanceof Map) {
+        	if(_log.isDebugEnabled()) {
+        		_log.debug("The map {} will be processed to remap the contained objects.", o);
+        	}
             return eventConverter.convert(o).to(MAP_OF_OBJECT_TO_OBJECT);
         }
 
         if (sourceClass.isArray()) {
+        	if(_log.isDebugEnabled()) {
+        		_log.debug("The array {} will be processed to remap the contained objects.", o);
+        	}
             int depth = 1;
             Class<?> arrayComponentType = sourceClass.getComponentType();
             Class<?> actualComponentType = sourceClass.getComponentType();
@@ -149,12 +174,21 @@ public class EventConverter {
                 actualComponentType = actualComponentType.getComponentType();
             }
             if (safeClasses.contains(actualComponentType) || actualComponentType.isPrimitive()) {
+            	if(_log.isDebugEnabled()) {
+            		_log.debug("The array {} does not need conversion.", o);
+            	}
                 return o;
             } else if (actualComponentType.isEnum()) {
+            	if(_log.isDebugEnabled()) {
+            		_log.debug("The array {} will use String values.", o);
+            	}
                 // This becomes an n dimensional String array
                 Class<?> stringArrayType = Array.newInstance(String.class, new int[depth]).getClass();
                 return eventConverter.convert(o).to(stringArrayType);
             } else {
+            	if(_log.isDebugEnabled()) {
+            		_log.debug("The array {} is complex and will be treated as a list.", o);
+            	}
                 // This is an array of something complicated, recursively turn it into a
                 // list of something, then make it into an array of the right type
                 List<Object> oList = eventConverter.convert(o).to(LIST_OF_OBJECTS);
@@ -162,6 +196,9 @@ public class EventConverter {
             }
         }
 
+        if(_log.isDebugEnabled()) {
+    		_log.debug("The object {} will be treated as a DTO.", o);
+    	}
         // If we get here then treat the type as a DTO
         return eventConverter.convert(o).sourceAsDTO().to(MAP_WITH_STRING_KEYS);
     }
@@ -171,15 +208,17 @@ public class EventConverter {
             Set<Object> errors = errorsBeingHandled.get();
 
             if (errors.contains(o)) {
-                // TODO log the warning in a big way
+            	if(_log.isWarnEnabled()) {
+            		_log.warn("The map {} repeatedly failed conversion to type {}. This event cannot be converted", o, target);
+            	}
                 return ConverterFunction.CANNOT_HANDLE;
             }
 
             try {
+            	if(_log.isWarnEnabled()) {
+            		_log.warn("The map {} failed conversion to type {}. Convertsion will be reattempted treating the target as a DTO", o, target);
+            	}
                 errors.add(o);
-
-                // TODO log the warning in a big way
-
                 return eventConverter.convert(o).targetAsDTO().to(target);
             } finally {
                 errors.remove(o);
@@ -191,14 +230,14 @@ public class EventConverter {
     private final Object originalEvent;
     private final CustomEventConverter custom;
 
-    private Map<String, ?> untypedEventDataForFiltering;
+    private Map<String, Object> untypedEventDataForFiltering;
 
     private EventConverter(Object event, CustomEventConverter custom) {
         this.originalEvent = event;
 		this.custom = custom;
     }
 
-    private EventConverter(Map<String, ?> untypedEvent, CustomEventConverter custom) {
+    private EventConverter(Map<String, Object> untypedEvent, CustomEventConverter custom) {
         this.originalEvent = untypedEvent;
         this.custom = custom;
         this.untypedEventDataForFiltering = untypedEvent;
@@ -223,12 +262,29 @@ public class EventConverter {
         return f.matches(toTest);
     }
 
-    public Map<String, ?> toUntypedEvent() {
+    public Map<String, Object> toUntypedEvent() {
         if (untypedEventDataForFiltering == null) {
-        	if(custom == null || 
-        			(untypedEventDataForFiltering = custom.toUntypedEvent(originalEvent)) == null ) {
+        	if(custom != null) {
+        		if(_log.isDebugEnabled()) {
+        			_log.debug("Using custom converter to convert {} to untyped data", originalEvent);
+        		}
+        		untypedEventDataForFiltering = custom.toUntypedEvent(originalEvent);
+        		if(untypedEventDataForFiltering == null) {
+        			if(_log.isDebugEnabled()) {
+        				_log.debug("Custom event converter could not convert event {}. Falling back to built-in conversion",
+        						originalEvent);
+        			}
+        			untypedEventDataForFiltering = eventConverter.convert(originalEvent).sourceAsDTO().to(MAP_WITH_STRING_KEYS);
+        		} else {
+        			return untypedEventDataForFiltering;
+        		}
+        	} else {
+        		if(_log.isDebugEnabled()) {
+        			_log.debug("Converting {} to untyped data", originalEvent);
+        		}
         		untypedEventDataForFiltering = eventConverter.convert(originalEvent).sourceAsDTO().to(MAP_WITH_STRING_KEYS);
         	}
+        	
         }
         return untypedEventDataForFiltering;
     }
@@ -238,15 +294,30 @@ public class EventConverter {
         Class<?> rawType = targetEventClass.getRawType();
         Type genericTarget = targetEventClass.getType();
 		if (rawType.isInstance(originalEvent) && rawType == genericTarget) {
+			if(_log.isDebugEnabled()) {
+    			_log.debug("No need to convert {} to {} as it is already an instance", originalEvent, rawType);
+    		}
             return (T) originalEvent;
         } else {
         	if(custom != null) {
+        		if(_log.isDebugEnabled()) {
+        			_log.debug("Using custom converter to convert {} to {}", originalEvent, genericTarget);
+        		}
 				Object result = custom.toTypedEvent(originalEvent, rawType, genericTarget);
 				if(result != null) {
 					return (T) result;
 				}
+				if(_log.isDebugEnabled()) {
+    				_log.debug("Custom event converter could not convert event {} to {}. Falling back to built-in conversion",
+    						originalEvent, genericTarget);
+    			}
+				return eventConverter.convert(originalEvent).targetAsDTO().to(genericTarget);
+        	} else {
+        		if(_log.isDebugEnabled()) {
+        			_log.debug("Converting {} to {}", originalEvent, genericTarget);
+        		}
+        		return eventConverter.convert(originalEvent).targetAsDTO().to(genericTarget);
         	}
-            return eventConverter.convert(originalEvent).targetAsDTO().to(genericTarget);
         }
     }
 

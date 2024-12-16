@@ -49,4 +49,9 @@ public final class TypeData {
 	public Type getType() {
 		return type;
 	}
+
+	@Override
+	public String toString() {
+		return "TypeData [type=" + type + "]";
+	}
 }
