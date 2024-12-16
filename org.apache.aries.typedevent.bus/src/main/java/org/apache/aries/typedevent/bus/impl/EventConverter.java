@@ -125,16 +125,16 @@ public class EventConverter {
 
         // "Safe" classes use an identity transform
         if (safeClasses.contains(sourceClass)) {
-        	if(_log.isDebugEnabled()) {
-        		_log.debug("The object {} does not require conversion.", o);
+        	if(_log.isTraceEnabled()) {
+        		_log.trace("The object {} does not require conversion.", o);
         	}
             return o;
         }
 
         // "Special" types and Enums map to strings
         if (specialClasses.contains(sourceClass) || sourceClass.isEnum()) {
-        	if(_log.isDebugEnabled()) {
-        		_log.debug("The object {} will be mapped as a String.", o);
+        	if(_log.isTraceEnabled()) {
+        		_log.trace("The object {} will be mapped as a String.", o);
         	}
             return eventConverter.convert(o).sourceAs(Object.class).to(String.class);
         }
@@ -143,8 +143,8 @@ public class EventConverter {
         // the relevant collection type containing objects, this
         // ensures we pick up any embedded lists of DTOs or enums
         if (o instanceof Collection) {
-        	if(_log.isDebugEnabled()) {
-        		_log.debug("The collection {} will be processed to map the contained objects.", o);
+        	if(_log.isTraceEnabled()) {
+        		_log.trace("The collection {} will be processed to map the contained objects.", o);
         	}
             if (o instanceof Set) {
                 return eventConverter.convert(o).to(SET_OF_OBJECTS);
@@ -156,15 +156,15 @@ public class EventConverter {
         // As with collections we remap nested maps to clean up any
         // undesirable types in the keys or values
         if (o instanceof Map) {
-        	if(_log.isDebugEnabled()) {
-        		_log.debug("The map {} will be processed to remap the contained objects.", o);
+        	if(_log.isTraceEnabled()) {
+        		_log.trace("The map {} will be processed to remap the contained objects.", o);
         	}
             return eventConverter.convert(o).to(MAP_OF_OBJECT_TO_OBJECT);
         }
 
         if (sourceClass.isArray()) {
-        	if(_log.isDebugEnabled()) {
-        		_log.debug("The array {} will be processed to remap the contained objects.", o);
+        	if(_log.isTraceEnabled()) {
+        		_log.trace("The array {} will be processed to remap the contained objects.", o);
         	}
             int depth = 1;
             Class<?> arrayComponentType = sourceClass.getComponentType();
@@ -174,20 +174,20 @@ public class EventConverter {
                 actualComponentType = actualComponentType.getComponentType();
             }
             if (safeClasses.contains(actualComponentType) || actualComponentType.isPrimitive()) {
-            	if(_log.isDebugEnabled()) {
-            		_log.debug("The array {} does not need conversion.", o);
+            	if(_log.isTraceEnabled()) {
+            		_log.trace("The array {} does not need conversion.", o);
             	}
                 return o;
             } else if (actualComponentType.isEnum()) {
-            	if(_log.isDebugEnabled()) {
-            		_log.debug("The array {} will use String values.", o);
+            	if(_log.isTraceEnabled()) {
+            		_log.trace("The array {} will use String values.", o);
             	}
                 // This becomes an n dimensional String array
                 Class<?> stringArrayType = Array.newInstance(String.class, new int[depth]).getClass();
                 return eventConverter.convert(o).to(stringArrayType);
             } else {
-            	if(_log.isDebugEnabled()) {
-            		_log.debug("The array {} is complex and will be treated as a list.", o);
+            	if(_log.isTraceEnabled()) {
+            		_log.trace("The array {} is complex and will be treated as a list.", o);
             	}
                 // This is an array of something complicated, recursively turn it into a
                 // list of something, then make it into an array of the right type
@@ -196,8 +196,8 @@ public class EventConverter {
             }
         }
 
-        if(_log.isDebugEnabled()) {
-    		_log.debug("The object {} will be treated as a DTO.", o);
+        if(_log.isTraceEnabled()) {
+    		_log.trace("The object {} will be treated as a DTO.", o);
     	}
         // If we get here then treat the type as a DTO
         return eventConverter.convert(o).sourceAsDTO().to(MAP_WITH_STRING_KEYS);
