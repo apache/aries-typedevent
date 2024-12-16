@@ -17,6 +17,22 @@
 
 package org.apache.aries.typedevent.bus.impl;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 abstract class EventTask {
-    public abstract void notifyListener();
+	
+	private static final Logger _log = LoggerFactory.getLogger(EventTask.class);
+	
+    public void notifyListener() {
+    	try {
+            unsafeNotify();
+        } catch (Exception e) {
+        	// TODO blacklisting?
+            _log.error("The event delivery failed for task type.", getClass(), e);
+        }
+    }
+    
+    protected abstract void unsafeNotify() throws Exception;
+    
 }

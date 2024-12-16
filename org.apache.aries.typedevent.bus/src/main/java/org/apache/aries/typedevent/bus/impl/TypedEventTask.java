@@ -18,8 +18,13 @@
 package org.apache.aries.typedevent.bus.impl;
 
 import org.osgi.service.typedevent.TypedEventHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class TypedEventTask extends EventTask {
+	
+	private static final Logger _log = LoggerFactory.getLogger(TypedEventTask.class);
+	
     private final String topic;
     private final TypeData targetEventClass;
     private final EventConverter eventData;
@@ -36,11 +41,10 @@ class TypedEventTask extends EventTask {
     }
 
     @Override
-    public void notifyListener() {
-        try {
-            eventProcessor.notify(topic, eventData.toTypedEvent(targetEventClass));
-        } catch (Exception e) {
-            // TODO log this, also blacklist?
-        }
+    public void unsafeNotify() {
+    	if(_log.isDebugEnabled()) {
+    		_log.debug("Distributing event data {} to the typed handler {}", eventData, eventProcessor);
+    	}
+        eventProcessor.notify(topic, eventData.toTypedEvent(targetEventClass));
     }
 }

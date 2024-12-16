@@ -38,7 +38,7 @@ public abstract class HistoryReplayTask extends EventTask {
 	}
 
 	@Override
-	public void notifyListener() {
+	protected void unsafeNotify() {
 		// In most recent first order
 		List<MonitorEvent> events = monitorImpl.copyOfHistory(this::filterHistory);
 		

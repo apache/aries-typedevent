@@ -52,10 +52,14 @@ import org.osgi.util.pushstream.PushStreamProvider;
 import org.osgi.util.pushstream.PushbackPolicyOption;
 import org.osgi.util.pushstream.QueuePolicyOption;
 import org.osgi.util.pushstream.SimplePushEventSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Capability(namespace = ServiceNamespace.SERVICE_NAMESPACE, attribute = "objectClass:List<String>=org.osgi.service.typedevent.monitor.TypedEventMonitor", uses = TypedEventMonitor.class)
 public class TypedEventMonitorImpl implements TypedEventMonitor {
 
+	private static final Logger _log = LoggerFactory.getLogger(TypedEventMonitorImpl.class);
+	
     private final LinkedList<MonitorEvent> historicEvents = new LinkedList<MonitorEvent>();
 
     private final ExecutorService monitoringWorker;
@@ -217,10 +221,14 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 		while (li.hasPrevious()) {
 			try {
 				if (pec.accept(PushEvent.data(li.previous())) < 0) {
+					if(_log.isDebugEnabled()) {
+                		_log.debug("Historical event delivery halted by the consumer");
+                	}
 					return () -> {
 					};
 				}
 			} catch (Exception e) {
+				_log.warn("An error occurred delivering historical events", e);
 				return () -> {
 				};
 			}

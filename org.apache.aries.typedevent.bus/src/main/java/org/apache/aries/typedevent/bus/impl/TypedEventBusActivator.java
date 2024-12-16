@@ -61,8 +61,8 @@ public class TypedEventBusActivator implements BundleActivator {
 
     @Override
     public void start(BundleContext bundleContext) throws Exception {
-        if (_log.isDebugEnabled()) {
-            _log.debug("Aries Typed Event Bus Starting");
+        if (_log.isInfoEnabled()) {
+            _log.info("Aries Typed Event Bus Starting");
         }
 
         eventBus = coalesce(
@@ -73,8 +73,8 @@ public class TypedEventBusActivator implements BundleActivator {
                 .flatMap(configuration -> createProgram(configuration))
                 .run(bundleContext);
 
-        if (_log.isDebugEnabled()) {
-            _log.debug("Aries Typed Event Bus Started");
+        if (_log.isInfoEnabled()) {
+            _log.info("Aries Typed Event Bus Started");
         }
     }
 
@@ -155,14 +155,14 @@ public class TypedEventBusActivator implements BundleActivator {
 
     @Override
     public void stop(BundleContext context) throws Exception {
-        if (_log.isDebugEnabled()) {
-            _log.debug("Aries Typed Event Bus Stopping");
+        if (_log.isInfoEnabled()) {
+            _log.info("Aries Typed Event Bus Stopping");
         }
 
         eventBus.close();
 
-        if (_log.isDebugEnabled()) {
-            _log.debug("Aries Typed Event Bus Stopped");
+        if (_log.isInfoEnabled()) {
+            _log.info("Aries Typed Event Bus Stopped");
         }
     }
 }

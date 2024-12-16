@@ -17,10 +17,13 @@
 
 package org.apache.aries.typedevent.bus.impl;
 
-import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class MonitorEventTask extends EventTask {
 
+	private static final Logger _log = LoggerFactory.getLogger(MonitorEventTask.class);
+	
     private final String eventType;
     private final EventConverter eventData;
     private final TypedEventMonitorImpl monitorImpl;
@@ -32,13 +35,11 @@ class MonitorEventTask extends EventTask {
         this.monitorImpl = monitorImpl;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public void notifyListener() {
-        try {
-            monitorImpl.event(eventType, (Map<String, Object>) eventData.toUntypedEvent());
-        } catch (Exception e) {
-            // TODO log this, also blacklist?
-        }
+    protected void unsafeNotify() throws Exception {    	
+    	if(_log.isDebugEnabled()) {
+    		_log.debug("Distributing event to the event monitor");
+    	}
+    	monitorImpl.event(eventType, eventData.toUntypedEvent());
     }
 }

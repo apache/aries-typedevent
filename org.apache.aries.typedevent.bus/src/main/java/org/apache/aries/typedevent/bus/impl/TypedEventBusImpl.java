@@ -59,11 +59,15 @@ import org.osgi.service.typedevent.TypedEventPublisher;
 import org.osgi.service.typedevent.UnhandledEventHandler;
 import org.osgi.service.typedevent.UntypedEventHandler;
 import org.osgi.util.converter.TypeReference;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Capability(namespace=SERVICE_NAMESPACE, attribute="objectClass:List<String>=org.osgi.service.typedevent.TypedEventBus", uses=TypedEventBus.class)
 @Capability(namespace=IMPLEMENTATION_NAMESPACE, name=TYPED_EVENT_IMPLEMENTATION, version=TYPED_EVENT_SPECIFICATION_VERSION, uses=TypedEventBus.class)
 public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
 
+	private static final Logger _log = LoggerFactory.getLogger(TypedEventBusImpl.class);
+	
     private static final TypeReference<List<String>> LIST_OF_STRINGS = new TypeReference<List<String>>() {
     };
 
@@ -163,6 +167,9 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
     		}
     		customEventConverter = converter;
 		}
+    	if(_log.isInfoEnabled()) {
+    		_log.info("A Custom Event Converter was registered");
+    	}
     }
 
     void addTypedEventHandler(Bundle registeringBundle, TypedEventHandler<?> handler, Map<String, Object> properties) {
@@ -185,8 +192,7 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
             try {
                  genType = registeringBundle.loadClass(String.valueOf(type));
             } catch (ClassNotFoundException e) {
-                // TODO Blow up
-                e.printStackTrace();
+                _log.error("Unable to load the declared event type {} from bundle {}", type, registeringBundle, e);
             }
         } else {
             Class<?> toCheck = handler.getClass();
@@ -214,7 +220,7 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
             }
             return typeData;
         } else {
-            // TODO log
+        	_log.error("Unable to determine the declared event type for service {} from bundle {}", getServiceId(properties), registeringBundle);
         	throw new IllegalArgumentException("Unable to determine handled type for " + handler);
         }
     }
@@ -259,7 +265,7 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
         List<String> topicList;
         if (prop == null) {
             if (defaultTopic == null) {
-                // TODO log a broken handler
+            	_log.error("Unable to determine the registered topics for service {} from service {}", getServiceId(properties));
                 return;
             } else {
                 topicList = Collections.singletonList(defaultTopic);
@@ -272,7 +278,7 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
         		.filter(s -> {
         			String msg = checkTopicSyntax(s, true);
         			if(msg != null) {
-        				// TODO log this
+        				_log.warn("The topic filter string {} from service {} is not valid: {}", s, getServiceId(properties), msg);
         			}
         			return msg == null;
         		})
@@ -284,8 +290,7 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
         try {
             f = getFilter(serviceId, properties);
         } catch (IllegalArgumentException e) {
-            // TODO Log a broken handler
-            e.printStackTrace();
+        	_log.error("The event filter from service {} is not valid", getServiceId(properties), e);
             return;
         }
 
@@ -325,6 +330,9 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
             if(history > 0) {
             	queue.add(historicalEvents.apply(selectors, history));
             }
+        }
+        if(_log.isDebugEnabled()) {
+        	_log.debug("Added service {} as an event handler for topics {}", serviceId, topicList);
         }
     }
 
@@ -370,6 +378,7 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
 
     private <T, U> void doRemoveEventHandler(Map<String, Map<T, U>> map, Map<String, Map<T, U>> wildcardMap, Map<Long, T> idMap, 
             T handler, Long serviceId) {
+    	List<String> loggable;
         synchronized (lock) {
             List<String> consumed = knownHandlers.remove(serviceId);
             idMap.remove(serviceId);
@@ -392,7 +401,13 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
                         }
                     }
                 });
+                loggable = new ArrayList<String>(consumed);
+            } else {
+            	loggable = Collections.emptyList();
             }
+        }
+        if(_log.isDebugEnabled()) {
+        	_log.debug("Removed service {} as an event handler for topics {}", serviceId, loggable);
         }
     }
 
@@ -424,7 +439,7 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
             doAddEventHandler(map, wildcardMap, idToHandler, handler, defaultTopic, properties,
             		(a,b) -> new EventTask() {
 						@Override
-						public void notifyListener() {
+						protected void unsafeNotify() {
 							// no-op as history will already have been played
 						}
 					});
@@ -539,8 +554,9 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
             deliveryTasks.addAll(wildcardDeliveries);
             
             if (deliveryTasks.isEmpty()) {
-                // TODO log properly
-                System.out.println("Unhandled Event Handlers are being used for event sent to topic " + topic);
+				if(_log.isDebugEnabled()) {
+					_log.debug("Unhandled Event Handlers are being used for event sent to topic {}", topic);
+				}
                 deliveryTasks.addAll(toUnhandledEventTasks(topicsToUnhandledHandlers.getOrDefault(topic, emptyMap()), 
                 		topic, convertibleEventData));
                 deliveryTasks.addAll(findWildcardTasks(topic, convertibleEventData, 
@@ -701,8 +717,7 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
                 try {
                     take = queue.take();
                 } catch (InterruptedException e) {
-                    // TODO log the interrupt and continue
-                    e.printStackTrace();
+                    _log.info("The {} was interrupted while waiting for events", e);
                     continue;
                 }
 
