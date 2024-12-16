@@ -17,11 +17,14 @@
 
 package org.apache.aries.typedevent.bus.impl;
 
-import java.util.Map;
-
 import org.osgi.service.typedevent.UnhandledEventHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class UnhandledEventTask extends EventTask {
+	
+	private static final Logger _log = LoggerFactory.getLogger(UnhandledEventTask.class);
+	
     private final String topic;
     private final EventConverter eventData;
     private final UnhandledEventHandler eventProcessor;
@@ -33,13 +36,11 @@ class UnhandledEventTask extends EventTask {
         this.eventProcessor = eventProcessor;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public void notifyListener() {
-        try {
-            eventProcessor.notifyUnhandled(topic, (Map<String, Object>) eventData.toUntypedEvent());
-        } catch (Exception e) {
-            // TODO log this, also blacklist?
-        }
+    public void unsafeNotify() {
+    	if(_log.isDebugEnabled()) {
+    		_log.debug("Distributing event data {} to the unhandled event handler {}", eventData, eventProcessor);
+    	}
+        eventProcessor.notifyUnhandled(topic, eventData.toUntypedEvent());
     }
 }

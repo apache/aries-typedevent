@@ -37,10 +37,14 @@ import org.osgi.util.pushstream.PushStreamProvider;
 import org.osgi.util.pushstream.PushbackPolicyOption;
 import org.osgi.util.pushstream.QueuePolicyOption;
 import org.osgi.util.pushstream.SimplePushEventSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Capability(namespace = ServiceNamespace.SERVICE_NAMESPACE, attribute = "objectClass:List<String>=org.osgi.service.typedevent.monitor.TypedEventMonitor", uses = TypedEventMonitor.class)
 public class TypedEventMonitorImpl implements TypedEventMonitor {
 
+	private static final Logger _log = LoggerFactory.getLogger(TypedEventMonitorImpl.class);
+	
     private final LinkedList<MonitorEvent> historicEvents = new LinkedList<MonitorEvent>();
 
     private final ExecutorService monitoringWorker;
@@ -116,10 +120,14 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
                 for (MonitorEvent me : list) {
                     try {
                         if (pec.accept(PushEvent.data(me)) < 0) {
+                        	if(_log.isDebugEnabled()) {
+                        		_log.debug("Historical event delivery halted by the consumer");
+                        	}
                             return () -> {
                             };
                         }
                     } catch (Exception e) {
+                    	_log.warn("An error occurred delivering historical events", e);
                         return () -> {
                         };
                     }
@@ -140,6 +148,7 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
                 while (it.hasNext()) {
                     MonitorEvent next = it.next();
                     if (next.publicationTime.isAfter(since)) {
+                    	// Go back one so we don't lose the first match
                         it.previous();
                         break;
                     }
@@ -148,10 +157,14 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
                 while (it.hasNext()) {
                     try {
                         if (pec.accept(PushEvent.data(it.next())) < 0) {
+                        	if(_log.isDebugEnabled()) {
+                        		_log.debug("Historical event delivery halted by the consumer");
+                        	}
                             return () -> {
                             };
                         }
                     } catch (Exception e) {
+                    	_log.warn("An error occurred delivering historical events", e);
                         return () -> {
                         };
                     }
