@@ -17,6 +17,7 @@
 
 package org.apache.aries.typedevent.bus.impl;
 
+import org.apache.aries.typedevent.bus.spi.TypeData;
 import org.osgi.service.typedevent.TypedEventHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -44,6 +44,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.apache.aries.typedevent.bus.spi.CustomEventConverter;
+import org.apache.aries.typedevent.bus.spi.TypeData;
 import org.osgi.framework.Filter;
 import org.osgi.util.converter.Converter;
 import org.osgi.util.converter.ConverterFunction;
@@ -296,35 +297,39 @@ public class EventConverter {
     }
 
     @SuppressWarnings("unchecked")
-	public <T> T toTypedEvent(TypeData targetEventClass) {
-        Class<?> rawType = targetEventClass.getRawType();
-        Type genericTarget = targetEventClass.getType();
-		if (rawType.isInstance(originalEvent) && rawType == genericTarget) {
-			if(_log.isDebugEnabled()) {
-    			_log.debug("No need to convert {} to {} as it is already an instance", originalEvent, rawType);
-    		}
-            return (T) originalEvent;
-        } else {
-        	if(custom != null) {
-        		if(_log.isDebugEnabled()) {
-        			_log.debug("Using custom converter to convert {} to {}", originalEvent, genericTarget);
-        		}
-				Object result = custom.toTypedEvent(originalEvent, rawType, genericTarget);
-				if(result != null) {
-					return (T) result;
-				}
-				if(_log.isDebugEnabled()) {
-    				_log.debug("Custom event converter could not convert event {} to {}. Falling back to built-in conversion",
-    						originalEvent, genericTarget);
-    			}
-				return eventConverter.convert(originalEvent).targetAsDTO().to(genericTarget);
-        	} else {
-        		if(_log.isDebugEnabled()) {
-        			_log.debug("Converting {} to {}", originalEvent, genericTarget);
-        		}
-        		return eventConverter.convert(originalEvent).targetAsDTO().to(genericTarget);
-        	}
-        }
-    }
+	public <T> T toTypedEvent(TypeData typeData) {
+		Class<?> rawType = typeData.getRawType();
+		Type genericTarget = typeData.getType();
+		if (typeData.isForceConversion()) {
+			if (_log.isDebugEnabled()) {
+				_log.debug("Conversion is forced by property {}", TypeData.ARIES_EVENT_FORCE_CONVERSION);
+			}
+		} else if (rawType.isInstance(originalEvent) && rawType == genericTarget) {
+			if (_log.isDebugEnabled()) {
+				_log.debug("No need to convert {} to {} as it is already an instance", originalEvent, rawType);
+			}
+			return (T) originalEvent;
+		}
+		if (custom != null) {
+			if (_log.isDebugEnabled()) {
+				_log.debug("Using custom converter to convert {} to {}", originalEvent, genericTarget);
+			}
+			Object result = custom.toTypedEvent(originalEvent, typeData);
+			if (result != null) {
+				return (T) result;
+			}
+			if (_log.isDebugEnabled()) {
+				_log.debug(
+						"Custom event converter could not convert event {} to {}. Falling back to built-in conversion",
+						originalEvent, genericTarget);
+			}
+			return eventConverter.convert(originalEvent).targetAsDTO().to(genericTarget);
+		} else {
+			if (_log.isDebugEnabled()) {
+				_log.debug("Converting {} to {}", originalEvent, genericTarget);
+			}
+			return eventConverter.convert(originalEvent).targetAsDTO().to(genericTarget);
+		}
+	}
 
 }
