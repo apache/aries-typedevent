@@ -178,7 +178,7 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
             }
         } else {
             Class<?> toCheck = handler.getClass();
-            outer: while(genType == null) {
+            outer: while(genType == null && toCheck != null) {
                 genType = findDirectlyImplemented(toCheck);
                 
                 if(genType != null) {
