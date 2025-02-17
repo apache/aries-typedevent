@@ -30,6 +30,7 @@ import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_TOPICS
 import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_TYPE;
 import static org.osgi.util.converter.Converters.standardConverter;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
@@ -124,12 +125,14 @@ public class TypedEventBusImplTest {
             return null;
         }).when(unhandledHandler).notifyUnhandled(Mockito.anyString(), Mockito.any());
 
-        monitorImpl = new TypedEventMonitorImpl(new HashMap<String, Object>());
+        Map<String, Object> config = Collections.emptyMap();
+        
+        monitorImpl = new TypedEventMonitorImpl(config);
 
-        impl = new TypedEventBusImpl(monitorImpl, new HashMap<String, Object>());
+        impl = new TypedEventBusImpl(monitorImpl, config);
         impl.start();
     }
-
+    
     @AfterEach
     public void stop() throws Exception {
         impl.stop();
