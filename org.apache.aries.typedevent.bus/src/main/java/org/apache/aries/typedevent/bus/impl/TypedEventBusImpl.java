@@ -43,6 +43,7 @@ import java.util.function.BiFunction;
 
 import org.apache.aries.typedevent.bus.spi.AriesTypedEvents;
 import org.apache.aries.typedevent.bus.spi.CustomEventConverter;
+import org.apache.aries.typedevent.bus.spi.TypeData;
 import org.osgi.annotation.bundle.Capability;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.Constants;
@@ -160,14 +161,14 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
     }
 
     void addTypedEventHandler(Bundle registeringBundle, TypedEventHandler<?> handler, Map<String, Object> properties) {
-        Class<?> clazz = discoverTypeForTypedHandler(registeringBundle, handler, properties);
-        
+        TypeData typeData = discoverTypeForTypedHandler(registeringBundle, handler, properties);
+        Class<?> clazz = typeData.getRawType();
         String defaultTopic = clazz == null ? null : clazz.getName().replace(".", "/");
 
         doAddEventHandler(topicsToTypedHandlers, wildcardTopicsToTypedHandlers, knownTypedHandlers, handler, defaultTopic, properties);
     }
 
-    private Class<?> discoverTypeForTypedHandler(Bundle registeringBundle, TypedEventHandler<?> handler, Map<String, Object> properties) {
+    private TypeData discoverTypeForTypedHandler(Bundle registeringBundle, TypedEventHandler<?> handler, Map<String, Object> properties) {
         Type genType = null;
         Object type = properties.get(TypedEventConstants.TYPED_EVENT_TYPE);
         if (type != null) {
@@ -196,11 +197,11 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
         }
 
         if (genType != null) {
-        	TypeData typeData = new TypeData(genType);
+            TypeData typeData = new TypeData(genType, properties);
             synchronized (lock) {
 				typedHandlersToTargetClasses.put(handler, typeData);
             }
-            return typeData.getRawType();
+            return typeData;
         } else {
         	_log.error("Unable to determine the declared event type for service {} from bundle {}", getServiceId(properties), registeringBundle);
         	throw new IllegalArgumentException("Unable to determine handled type for " + handler);
@@ -382,7 +383,8 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
             handler = knownTypedHandlers.get(serviceId);
         }
         
-        Class<?> clazz = discoverTypeForTypedHandler(registeringBundle, handler, properties);
+        TypeData typeData = discoverTypeForTypedHandler(registeringBundle, handler, properties);
+        Class<?> clazz = typeData.getRawType(); 
         
         String defaultTopic = clazz == null ? null : clazz.getName().replace(".", "/");
         

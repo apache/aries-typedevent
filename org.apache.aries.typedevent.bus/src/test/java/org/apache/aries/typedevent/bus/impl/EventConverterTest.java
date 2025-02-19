@@ -17,16 +17,18 @@
 
 package org.apache.aries.typedevent.bus.impl;
 
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.util.Collections;
 import java.util.Map;
 
 import org.apache.aries.typedevent.bus.spi.CustomEventConverter;
+import org.apache.aries.typedevent.bus.spi.TypeData;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.osgi.service.typedevent.TypedEventHandler;
@@ -79,7 +81,7 @@ public class EventConverterTest {
         assertEquals("FOO", map.get("message"));
 
         TestEvent testEvent = EventConverter.forUntypedEvent(map, null)
-        		.toTypedEvent(new TypeData(TestEvent.class));
+        		.toTypedEvent(new TypeData(TestEvent.class, Collections.emptyMap()));
 
         assertEquals(te.message, testEvent.message);
 
@@ -101,7 +103,7 @@ public class EventConverterTest {
         assertEquals("FOO", nested.get("message"));
 
         NestedEventHolder testEvent = EventConverter.forUntypedEvent(map, null)
-        		.toTypedEvent(new TypeData(NestedEventHolder.class));
+        		.toTypedEvent(new TypeData(NestedEventHolder.class, Collections.emptyMap()));
 
         assertEquals(te.message, testEvent.event.message);
 
@@ -124,7 +126,7 @@ public class EventConverterTest {
 
         try {
             EventConverter.forUntypedEvent(map, null).toTypedEvent(
-            		new TypeData(DefaultVisibilityNestedEventHolder.class));
+            		new TypeData(DefaultVisibilityNestedEventHolder.class, Collections.emptyMap()));
             fail("Should not succeed in creating a Default Visibility type");
         } catch (ConversionException ce) {
             assertEquals(IllegalAccessException.class, ce.getCause().getClass());
@@ -147,7 +149,7 @@ public class EventConverterTest {
         assertEquals("FOO", nested.get("message"));
 
         NestedEventHolderNotAProperDTO testEvent = EventConverter.forUntypedEvent(map, null)
-                .toTypedEvent(new TypeData(NestedEventHolderNotAProperDTO.class));
+                .toTypedEvent(new TypeData(NestedEventHolderNotAProperDTO.class, Collections.emptyMap()));
 
         assertEquals(te.message, testEvent.event.message);
 
@@ -174,7 +176,7 @@ public class EventConverterTest {
         assertEquals("FOO", nested.get("message"));
 
         DoublyNestedEventHolderWithIssues testEvent = EventConverter.forUntypedEvent(map, null)
-                .toTypedEvent(new TypeData(DoublyNestedEventHolderWithIssues.class));
+                .toTypedEvent(new TypeData(DoublyNestedEventHolderWithIssues.class, Collections.emptyMap()));
 
         assertEquals(te.message, testEvent.event.event.message);
 
@@ -196,7 +198,7 @@ public class EventConverterTest {
         assertEquals("FOO", nested.get("message"));
 
         NestedEventHolderNotAProperDTO testEvent = EventConverter.forUntypedEvent(map, null)
-                .toTypedEvent(new TypeData(NestedEventHolderNotAProperDTO.class));
+                .toTypedEvent(new TypeData(NestedEventHolderNotAProperDTO.class, Collections.emptyMap()));
 
         assertEquals(te.message, testEvent.event.message);
 
@@ -204,79 +206,92 @@ public class EventConverterTest {
 
     @Test
     public void testGenericFlattenAndReconstituteIntoADifferentType() {
-    	
-    	ParameterizedEvent<Integer> te = new ParameterizedEvent<>();
-    	te.parameterisedMessage = 42;
-    	
-    	Type integerType = ((ParameterizedType)IntegerTestHandler.class.getGenericInterfaces()[0])
-    			.getActualTypeArguments()[0];
-    	Type doubleType = ((ParameterizedType)DoubleTestHandler.class.getGenericInterfaces()[0])
-    			.getActualTypeArguments()[0];
-    	
-    	EventConverter eventConverter = EventConverter.forTypedEvent(te, null);
-		
-    	Map<String, ?> map = eventConverter.toUntypedEvent();
-    	assertEquals(42, map.get("parameterisedMessage"));
-    	
-    	ParameterizedEvent<Double> converted = eventConverter.toTypedEvent(new TypeData(doubleType));
-    	assertEquals(42d, converted.parameterisedMessage, 0.00001);
-    	
-    	ParameterizedEvent<Integer> testEvent = EventConverter.forUntypedEvent(
-    			Map.of("parameterisedMessage", "17"), null)
-    			.toTypedEvent(new TypeData(integerType));
-    	
-    	assertEquals(17, testEvent.parameterisedMessage);
-    	
+
+        ParameterizedEvent<Integer> te = new ParameterizedEvent<>();
+        te.parameterisedMessage = 42;
+
+        Type integerType = ((ParameterizedType) IntegerTestHandler.class.getGenericInterfaces()[0])
+                .getActualTypeArguments()[0];
+        Type doubleType = ((ParameterizedType) DoubleTestHandler.class.getGenericInterfaces()[0])
+                .getActualTypeArguments()[0];
+
+        EventConverter eventConverter = EventConverter.forTypedEvent(te, null);
+
+        Map<String, ?> map = eventConverter.toUntypedEvent();
+        assertEquals(42, map.get("parameterisedMessage"));
+
+        ParameterizedEvent<Double> converted = eventConverter.toTypedEvent(new TypeData(doubleType, Collections.emptyMap()));
+        assertEquals(42d, converted.parameterisedMessage, 0.00001);
+
+        ParameterizedEvent<Integer> testEvent = EventConverter
+                .forUntypedEvent(Map.of("parameterisedMessage", "17"), null)
+                .toTypedEvent(new TypeData(integerType, Collections.emptyMap()));
+
+        assertEquals(17, testEvent.parameterisedMessage);
+
     }
 
     @Test
     public void testCustomConverterRawTypes() {
-    	
-    	TestEvent te = new TestEvent();
+        TestEvent te = new TestEvent();
         te.message = "FOO";
         CustomEventConverter cec = Mockito.mock(CustomEventConverter.class);
-        
-        Mockito.when(cec.toUntypedEvent(te)).thenReturn(Map.of("message", "BAR"));
-        Mockito.when(cec.toTypedEvent(te, String.class, String.class)).thenReturn("FOOBAR");
-        Mockito.when(cec.toTypedEvent(te, TestEvent.class, TestEvent.class)).thenReturn("FIZZBUZZ");
+        TypeData stringTypeData = new TypeData(String.class, Collections.emptyMap());
+        TypeData testEventTypeData = new TypeData(TestEvent.class, Collections.emptyMap());
 
+        Mockito.when(cec.toUntypedEvent(te)).thenReturn(Map.of("message", "BAR"));
+        Mockito.when(cec.toTypedEvent(te, stringTypeData)).thenReturn("FOOBAR");
+        Mockito.when(cec.toTypedEvent(te, testEventTypeData)).thenReturn("FIZZBUZZ");
         EventConverter eventConverter = EventConverter.forTypedEvent(te, cec);
-		
+
         Map<String, ?> map = eventConverter.toUntypedEvent();
         assertEquals("BAR", map.get("message"));
-        assertEquals("FOOBAR", eventConverter.toTypedEvent(new TypeData(String.class)));
+        assertEquals("FOOBAR", eventConverter.toTypedEvent(stringTypeData));
 
         // Bypass the conversion if identity
-        assertSame(te, eventConverter.toTypedEvent(new TypeData(TestEvent.class)));
-        
-    }
-    
-    @Test
-    public void testCustomConverterWithGenerics() {
-    	
-    	ParameterizedEvent<Integer> te = new ParameterizedEvent<>();
-    	te.parameterisedMessage = 42;
-    	
-    	Type integerType = ((ParameterizedType)IntegerTestHandler.class.getGenericInterfaces()[0])
-    			.getActualTypeArguments()[0];
-    	Type doubleType = ((ParameterizedType)DoubleTestHandler.class.getGenericInterfaces()[0])
-    			.getActualTypeArguments()[0];
-    	
-    	CustomEventConverter cec = Mockito.mock(CustomEventConverter.class);
-    	
-    	Mockito.when(cec.toUntypedEvent(te)).thenReturn(Map.of("parameterisedMessage", "21"));
-        Mockito.when(cec.toTypedEvent(te, ParameterizedEvent.class, integerType)).thenReturn(21d);
-        Mockito.when(cec.toTypedEvent(te, ParameterizedEvent.class, doubleType)).thenReturn(63d);
-    	
-    	EventConverter eventConverter = EventConverter.forTypedEvent(te, cec);
-    	
-    	Map<String, ?> map = eventConverter.toUntypedEvent();
-    	assertEquals("21", map.get("parameterisedMessage"));
-    	
-    	// Never bypass as we can't easily verify the generics
-    	assertEquals(21d, eventConverter.toTypedEvent(new TypeData(integerType)), 0.00001);
-    	assertEquals(63d, eventConverter.toTypedEvent(new TypeData(doubleType)), 0.00001);
-    	
+        assertSame(te, eventConverter.toTypedEvent(testEventTypeData));
     }
 
+    @Test
+    public void testCustomConverterForceConversion() {
+        TestEvent te = new TestEvent();
+        te.message = "FOO";
+        CustomEventConverter cec = Mockito.mock(CustomEventConverter.class);
+        Map<String, Object> serviceProperties = Collections.singletonMap(TypeData.ARIES_EVENT_FORCE_CONVERSION, true);
+        TypeData testEventTypeData = new TypeData(TestEvent.class, serviceProperties);
+
+        Mockito.when(cec.toTypedEvent(te, testEventTypeData)).thenReturn("FIZZBUZZ");
+        EventConverter eventConverter = EventConverter.forTypedEvent(te, cec);
+
+        assertSame("FIZZBUZZ", eventConverter.toTypedEvent(testEventTypeData));
+    }
+
+    @Test
+    public void testCustomConverterWithGenerics() {
+
+        ParameterizedEvent<Integer> te = new ParameterizedEvent<>();
+        te.parameterisedMessage = 42;
+
+        Type integerType = ((ParameterizedType) IntegerTestHandler.class.getGenericInterfaces()[0])
+                .getActualTypeArguments()[0];
+        Type doubleType = ((ParameterizedType) DoubleTestHandler.class.getGenericInterfaces()[0])
+                .getActualTypeArguments()[0];
+
+        CustomEventConverter cec = Mockito.mock(CustomEventConverter.class);
+        TypeData intTypedData = new TypeData(integerType, Collections.emptyMap());
+        TypeData doubleTypedData = new TypeData(doubleType, Collections.emptyMap());
+
+        Mockito.when(cec.toUntypedEvent(te)).thenReturn(Map.of("parameterisedMessage", "21"));
+        Mockito.when(cec.toTypedEvent(te, intTypedData)).thenReturn(21d);
+        Mockito.when(cec.toTypedEvent(te, doubleTypedData)).thenReturn(63d);
+
+        EventConverter eventConverter = EventConverter.forTypedEvent(te, cec);
+
+        Map<String, ?> map = eventConverter.toUntypedEvent();
+        assertEquals("21", map.get("parameterisedMessage"));
+
+        // Never bypass as we can't easily verify the generics
+        assertEquals(21d, eventConverter.toTypedEvent(intTypedData), 0.00001);
+        assertEquals(63d, eventConverter.toTypedEvent(doubleTypedData), 0.00001);
+    }
 }

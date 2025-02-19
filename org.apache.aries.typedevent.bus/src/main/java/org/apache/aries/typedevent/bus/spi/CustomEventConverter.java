@@ -16,7 +16,6 @@
  */
 package org.apache.aries.typedevent.bus.spi;
 
-import java.lang.reflect.Type;
 import java.util.Map;
 
 import org.osgi.annotation.versioning.ConsumerType;
@@ -30,11 +29,10 @@ public interface CustomEventConverter {
 	/**
 	 * Convert the supplied event to the target type
 	 * @param event - the event to convert
-	 * @param rawTarget - the target class
-	 * @param genericTarget - the target type, including any generics information
+	 * @param typeData - the target type information
 	 * @return A converted event, or <code>null</code> if the event cannot be converted
 	 */
-	public <T> T toTypedEvent(Object event, Class<?> rawTarget, Type genericTarget);
+	public <T> T toTypedEvent(Object event, TypeData typeData);
 	
 	/**
 	 * Convert the supplied event to an untyped event (nested maps of scalar types)
