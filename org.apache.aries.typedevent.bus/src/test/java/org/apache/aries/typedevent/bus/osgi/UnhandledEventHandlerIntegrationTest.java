@@ -25,18 +25,18 @@ import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_FILTER;
+import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_TOPICS;
 
 import java.util.Dictionary;
 import java.util.Hashtable;
 
 import org.apache.aries.typedevent.bus.common.TestEvent;
 import org.apache.aries.typedevent.bus.common.TestEventConsumer;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.osgi.framework.BundleContext;
 import org.osgi.service.typedevent.TypedEventBus;
 import org.osgi.service.typedevent.TypedEventHandler;
@@ -56,6 +56,7 @@ import org.osgi.test.junit5.service.ServiceExtension;
  */
 @ExtendWith(BundleContextExtension.class)
 @ExtendWith(ServiceExtension.class)
+@ExtendWith(MockitoExtension.class)
 public class UnhandledEventHandlerIntegrationTest extends AbstractIntegrationTest {
     
     @InjectBundleContext
@@ -72,19 +73,10 @@ public class UnhandledEventHandlerIntegrationTest extends AbstractIntegrationTes
 
     @Mock
     UnhandledEventHandler unhandledEventHandler;
+    
+    @Mock
+    UnhandledEventHandler unhandledEventHandlerB;
 
-    private AutoCloseable mocks;
-    
-    @BeforeEach
-    public void setupMocks() {
-        mocks = MockitoAnnotations.openMocks(this);
-    }
-    
-    @AfterEach
-    public void stop() throws Exception {
-        mocks.close();
-    }
-    
     /**
      * Tests that the unhandledEventHandler gets called appropriately
      * @throws InterruptedException
@@ -161,6 +153,48 @@ public class UnhandledEventHandlerIntegrationTest extends AbstractIntegrationTes
         verify(unhandledEventHandler, timeout(1000)).notifyUnhandled(eq(TEST_EVENT_TOPIC), 
                 argThat(isUntypedTestEventWithMessage("bar")));
         
+    }
+
+    /**
+     * Tests that the consumer of last resort gets called appropriately
+     * @throws InterruptedException
+     */
+    @Test
+    public void testTopicFilterUnhandled() throws InterruptedException {
+    	
+    	Dictionary<String, Object> props = new Hashtable<>();
+    	props.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+    	
+    	regs.add(context.registerService(UnhandledEventHandler.class, unhandledEventHandler, props));
+    	
+    	props = new Hashtable<>();
+    	
+    	regs.add(context.registerService(UnhandledEventHandler.class, unhandledEventHandlerB, props));
+    	
+    	
+    	TestEvent event = new TestEvent();
+    	event.message = "foo";
+    	
+    	eventBus.deliver(TEST_EVENT_TOPIC, event);
+    	
+    	verify(unhandledEventHandler, timeout(1000)).notifyUnhandled(eq(TEST_EVENT_TOPIC), 
+    			argThat(isUntypedTestEventWithMessage("foo")));
+    	
+    	verify(unhandledEventHandlerB, timeout(1000)).notifyUnhandled(anyString(), argThat(isUntypedTestEventWithMessage("foo")));
+    	
+    	
+    	event = new TestEvent();
+    	event.message = "bar";
+    	
+    	
+    	eventBus.deliver(TEST_EVENT_2_TOPIC, event);
+    	
+    	verify(unhandledEventHandler, after(1000).never()).notifyUnhandled(eq(TEST_EVENT_2_TOPIC), 
+    			Mockito.any());
+    	
+    	verify(unhandledEventHandlerB, timeout(1000)).notifyUnhandled(eq(TEST_EVENT_2_TOPIC), 
+    			argThat(isUntypedTestEventWithMessage("bar")));
+    	
     }
     
 }

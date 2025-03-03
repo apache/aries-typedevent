@@ -33,13 +33,12 @@ import org.apache.aries.typedevent.bus.common.TestEventConsumer;
 import org.apache.aries.typedevent.bus.spi.AriesTypedEvents;
 import org.apache.aries.typedevent.bus.spi.CustomEventConverter;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.osgi.framework.BundleContext;
 import org.osgi.service.typedevent.TypedEventBus;
 import org.osgi.service.typedevent.TypedEventConstants;
@@ -59,6 +58,7 @@ import org.osgi.test.junit5.service.ServiceExtension;
  */
 @ExtendWith(BundleContextExtension.class)
 @ExtendWith(ServiceExtension.class)
+@ExtendWith(MockitoExtension.class)
 public class EventDeliveryIntegrationTest extends AbstractIntegrationTest {
     
     @InjectBundleContext
@@ -79,17 +79,9 @@ public class EventDeliveryIntegrationTest extends AbstractIntegrationTest {
     @Mock
     CustomEventConverter customConverter;
 
-    private AutoCloseable mocks;
-    
-    @BeforeEach
-    public void setupMocks() {
-        mocks = MockitoAnnotations.openMocks(this);
-    }
-    
     @AfterEach
     public void stop() throws Exception {
     	((AriesTypedEvents) eventBus).registerGlobalEventConverter(null, true);
-        mocks.close();
     }
     
     /**
@@ -311,6 +303,56 @@ public class EventDeliveryIntegrationTest extends AbstractIntegrationTest {
     	Mockito.clearInvocations(typedEventHandler, untypedEventHandler);
     	
     	props.put(TYPED_EVENT_TOPICS, "foo/bar/foobar/*");
+    	
+    	regs.forEach(s -> s.setProperties(props));
+    	
+    	eventBus.deliver("foo/bar/foobar", event);
+    	
+    	Mockito.verify(typedEventHandler, Mockito.after(1000).never()).notify(
+    			Mockito.eq("foo/bar/foobar"), Mockito.any());
+    	Mockito.verify(untypedEventHandler, Mockito.after(1000).never()).notifyUntyped(
+    			Mockito.eq("foo/bar/foobar"), Mockito.any());
+    	
+    	eventBus.deliver("foo/bar/foobar/fizzbuzz", event);
+    	
+    	Mockito.verify(typedEventHandler, Mockito.timeout(1000)).notify(
+    			Mockito.eq("foo/bar/foobar/fizzbuzz"), Mockito.argThat(isTestEventWithMessage("boo")));
+    	
+    	Mockito.verify(untypedEventHandler, Mockito.timeout(1000)).notifyUntyped(
+    			Mockito.eq("foo/bar/foobar/fizzbuzz"), Mockito.argThat(isUntypedTestEventWithMessage("boo")));
+    	
+    }
+
+    /**
+     * Tests that events are delivered to untyped Event Handlers
+     * based on topic
+     * 
+     * @throws InterruptedException
+     */
+    @Test
+    public void testEventReceivingUpdateSingleLevelWildcardTopic() throws InterruptedException {
+    	
+    	TestEvent event = new TestEvent();
+    	event.message = "boo";
+    	
+    	Dictionary<String, Object> props = new Hashtable<>();
+    	props.put(TYPED_EVENT_TOPICS, "foo/+/foobar");
+    	
+    	regs.add(context.registerService(TypedEventHandler.class, typedEventHandler, props));
+    	
+    	regs.add(context.registerService(UntypedEventHandler.class, untypedEventHandler, props));
+    	
+    	eventBus.deliver("foo/bar/foobar", event);
+    	
+    	Mockito.verify(typedEventHandler, Mockito.timeout(1000)).notify(
+    			Mockito.eq("foo/bar/foobar"), Mockito.argThat(isTestEventWithMessage("boo")));
+    	
+    	Mockito.verify(untypedEventHandler, Mockito.timeout(1000)).notifyUntyped(
+    			Mockito.eq("foo/bar/foobar"), Mockito.argThat(isUntypedTestEventWithMessage("boo")));
+    	
+    	Mockito.clearInvocations(typedEventHandler, untypedEventHandler);
+    	
+    	props.put(TYPED_EVENT_TOPICS, "foo/bar/foobar/+");
     	
     	regs.forEach(s -> s.setProperties(props));
     	

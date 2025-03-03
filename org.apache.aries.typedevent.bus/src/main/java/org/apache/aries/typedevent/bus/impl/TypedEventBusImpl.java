@@ -22,8 +22,10 @@ import static java.util.stream.Collectors.toList;
 import static org.osgi.namespace.implementation.ImplementationNamespace.IMPLEMENTATION_NAMESPACE;
 import static org.osgi.namespace.service.ServiceNamespace.SERVICE_NAMESPACE;
 import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_FILTER;
+import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_HISTORY;
 import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_IMPLEMENTATION;
 import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_SPECIFICATION_VERSION;
+import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_TOPICS;
 import static org.osgi.util.converter.Converters.standardConverter;
 
 import java.lang.reflect.ParameterizedType;
@@ -40,6 +42,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 
 import org.apache.aries.typedevent.bus.spi.AriesTypedEvents;
 import org.apache.aries.typedevent.bus.spi.CustomEventConverter;
@@ -53,6 +56,7 @@ import org.osgi.framework.InvalidSyntaxException;
 import org.osgi.service.typedevent.TypedEventBus;
 import org.osgi.service.typedevent.TypedEventConstants;
 import org.osgi.service.typedevent.TypedEventHandler;
+import org.osgi.service.typedevent.TypedEventPublisher;
 import org.osgi.service.typedevent.UnhandledEventHandler;
 import org.osgi.service.typedevent.UntypedEventHandler;
 import org.osgi.util.converter.TypeReference;
@@ -104,9 +108,16 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
     private final Map<String, Map<UntypedEventHandler, EventSelector>> wildcardTopicsToUntypedHandlers = new HashMap<>();
 
     /**
-     * List access and mutation must be synchronized on {@link #lock}.
+     * Map access and mutation must be synchronized on {@link #lock}. Values from
+     * the map should be copied as the contents are not thread safe.
      */
-    private final List<UnhandledEventHandler> unhandledEventHandlers = new ArrayList<>();
+    private final Map<String, Map<UnhandledEventHandler, EventSelector>> topicsToUnhandledHandlers = new HashMap<>();
+
+    /**
+     * Map access and mutation must be synchronized on {@link #lock}. Values from
+     * the map should be copied as the contents are not thread safe.
+     */
+    private final Map<String, Map<UnhandledEventHandler, EventSelector>> wildcardTopicsToUnhandledHandlers = new HashMap<>();
 
     /**
      * Map access and mutation must be synchronized on {@link #lock}. Values from
@@ -126,6 +137,12 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
      */
     private final Map<Long, UntypedEventHandler> knownUntypedHandlers = new HashMap<>();
 
+    /**
+     * Map access and mutation must be synchronized on {@link #lock}. Values from
+     * the map should be copied as the contents are not thread safe.
+     */
+    private final Map<Long, UnhandledEventHandler> knownUnhandledHandlers = new HashMap<>();
+
     private final BlockingQueue<EventTask> queue = new LinkedBlockingQueue<>();
 
     /**
@@ -135,8 +152,6 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
     private EventThread thread;
 
     private final Object threadLock = new Object();
-    
-    private final boolean allowSingleLevelWildcards;
 
     /**
      * Access and mutation must be synchronized on {@link #lock}.
@@ -145,7 +160,6 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
 
     public TypedEventBusImpl(TypedEventMonitorImpl monitorImpl, Map<String, ?> config) {
         this.monitorImpl = monitorImpl;
-        this.allowSingleLevelWildcards = Boolean.parseBoolean(String.valueOf(config.get("extended.wildcards.enabled")));
     }
 
     public void registerGlobalEventConverter(CustomEventConverter converter, boolean force) {
@@ -161,11 +175,16 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
     }
 
     void addTypedEventHandler(Bundle registeringBundle, TypedEventHandler<?> handler, Map<String, Object> properties) {
-        TypeData typeData = discoverTypeForTypedHandler(registeringBundle, handler, properties);
-        Class<?> clazz = typeData.getRawType();
-        String defaultTopic = clazz == null ? null : clazz.getName().replace(".", "/");
+        TypeData genType = discoverTypeForTypedHandler(registeringBundle, handler, properties);
+        
+        String defaultTopic = genType == null ? null : genType.getRawType().getName().replace(".", "/");
 
-        doAddEventHandler(topicsToTypedHandlers, wildcardTopicsToTypedHandlers, knownTypedHandlers, handler, defaultTopic, properties);
+        // This function must only ever be called while holding #lock
+        BiFunction<List<EventSelector>, Integer, ? extends EventTask> replayTaskFactory = 
+        		(l,i) -> new TypedHistoryReplayTask(monitorImpl, customEventConverter, handler, genType, l, i);
+        
+		doAddEventHandler(topicsToTypedHandlers, wildcardTopicsToTypedHandlers, knownTypedHandlers, handler, defaultTopic, properties,
+        		replayTaskFactory);
     }
 
     private TypeData discoverTypeForTypedHandler(Bundle registeringBundle, TypedEventHandler<?> handler, Map<String, Object> properties) {
@@ -180,7 +199,7 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
         } else {
             Class<?> toCheck = handler.getClass();
             outer: while(genType == null && toCheck != null) {
-                genType = findDirectlyImplemented(toCheck);
+            	genType = findDirectlyImplemented(toCheck);
                 
                 if(genType != null) {
                     break outer;
@@ -235,11 +254,13 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
     }
 
     void addUntypedEventHandler(UntypedEventHandler handler, Map<String, Object> properties) {
-        doAddEventHandler(topicsToUntypedHandlers, wildcardTopicsToUntypedHandlers, knownUntypedHandlers, handler, null, properties);
+        doAddEventHandler(topicsToUntypedHandlers, wildcardTopicsToUntypedHandlers, knownUntypedHandlers, handler, null, properties,
+        		(l,i) -> new UntypedHistoryReplayTask(monitorImpl, handler, l, i));
     }
 
     private <T> void doAddEventHandler(Map<String, Map<T, EventSelector>> map, Map<String, Map<T, EventSelector>> wildcardMap, 
-    		Map<Long, T> idMap, T handler, String defaultTopic, Map<String, Object> properties) {
+    		Map<Long, T> idMap, T handler, String defaultTopic, Map<String, Object> properties,
+    		BiFunction<List<EventSelector>, Integer, ? extends EventTask> historicalEvents) {
 
         Object prop = properties.get(TypedEventConstants.TYPED_EVENT_TOPICS);
 
@@ -275,10 +296,22 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
             return;
         }
 
+        Integer history = 0;
+        prop = properties.get(TYPED_EVENT_HISTORY);
+        if(prop != null) {
+        	try {
+        		history = Integer.parseInt(String.valueOf(prop));
+        	} catch (NumberFormatException nfe) {
+        		// TODO log a bad history property
+        	}
+        }
+        
         synchronized (lock) {
             knownHandlers.put(serviceId, topicList);
             idMap.put(serviceId, handler);
         
+            List<EventSelector> selectors = new ArrayList<>(topicList.size());
+            
             for(String s : topicList) {
             	Map<String, Map<T, EventSelector>> mapToUse;
             	String topicToUse;
@@ -294,6 +327,10 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
             	}
             	Map<T, EventSelector> handlers = mapToUse.computeIfAbsent(topicToUse, x1 -> new HashMap<>());
             	handlers.put(handler, selector);
+            	selectors.add(selector);
+            }
+            if(history > 0) {
+            	queue.add(historicalEvents.apply(selectors, history));
             }
         }
         if(_log.isDebugEnabled()) {
@@ -383,10 +420,9 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
             handler = knownTypedHandlers.get(serviceId);
         }
         
-        TypeData typeData = discoverTypeForTypedHandler(registeringBundle, handler, properties);
-        Class<?> clazz = typeData.getRawType(); 
+        TypeData genType = discoverTypeForTypedHandler(registeringBundle, handler, properties);
         
-        String defaultTopic = clazz == null ? null : clazz.getName().replace(".", "/");
+        String defaultTopic = genType == null ? null : genType.getRawType().getName().replace(".", "/");
         
         doUpdatedEventHandler(topicsToTypedHandlers, wildcardTopicsToTypedHandlers, knownTypedHandlers, defaultTopic, properties);
     }
@@ -401,21 +437,43 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
 
         synchronized (lock) {
             T handler = idToHandler.get(serviceId);
-			doRemoveEventHandler(map, wildcardMap, idToHandler, handler, serviceId);
-            doAddEventHandler(map, wildcardMap, idToHandler, handler, defaultTopic, properties);
+            doRemoveEventHandler(map, wildcardMap, idToHandler, handler, serviceId);
+            doAddEventHandler(map, wildcardMap, idToHandler, handler, defaultTopic, properties,
+            		(a,b) -> new EventTask() {
+						@Override
+						protected void unsafeNotify() {
+							// no-op as history will already have been played
+						}
+					});
         }
     }
 
     void addUnhandledEventHandler(UnhandledEventHandler handler, Map<String, Object> properties) {
-        synchronized (lock) {
-            unhandledEventHandlers.add(handler);
-        }
+    	properties = clearHistoryAndAddTopic(properties);
+    	
+    	doAddEventHandler(topicsToUnhandledHandlers, wildcardTopicsToUnhandledHandlers, knownUnhandledHandlers, handler, null, properties, null);
+    }
+
+	private Map<String, Object> clearHistoryAndAddTopic(Map<String, Object> properties) {
+		if(properties.containsKey(TYPED_EVENT_HISTORY) || !properties.containsKey(TYPED_EVENT_TOPICS)) {
+    		// TODO log warning
+    		properties = new HashMap<>(properties);
+    		properties.remove(TYPED_EVENT_HISTORY);
+    		properties.put(TYPED_EVENT_TOPICS, "*");
+    	}
+		return properties;
+	}
+    
+    void updatedUnhandledEventHandler(Map<String, Object> properties) {
+    	properties = clearHistoryAndAddTopic(properties);
+    	
+        doUpdatedEventHandler(topicsToUnhandledHandlers, wildcardTopicsToUnhandledHandlers, knownUnhandledHandlers, null, properties);
     }
 
     void removeUnhandledEventHandler(UnhandledEventHandler handler, Map<String, Object> properties) {
-        synchronized (lock) {
-            unhandledEventHandlers.remove(handler);
-        }
+    	Long serviceId = getServiceId(properties);
+
+        doRemoveEventHandler(topicsToUnhandledHandlers, wildcardTopicsToUnhandledHandlers, knownUnhandledHandlers, handler, serviceId);
     }
 
     void start() {
@@ -485,19 +543,12 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
             List<EventTask> untypedDeliveries = toUntypedEventTasks(
             		topicsToUntypedHandlers.getOrDefault(topic, emptyMap()), topic, convertibleEventData);
 
-            List<EventTask> wildcardDeliveries = new ArrayList<>();
-            String truncatedTopic = topic;
-            do {
-            	int idx = truncatedTopic.lastIndexOf('/', truncatedTopic.length() - 2);
-            	truncatedTopic = idx > 0 ? truncatedTopic.substring(0, idx + 1) : "";
-            	wildcardDeliveries.addAll(toTypedEventTasks(
-            			wildcardTopicsToTypedHandlers.getOrDefault(truncatedTopic, emptyMap()), 
-            			topic, convertibleEventData));
-            	wildcardDeliveries.addAll(toUntypedEventTasks(
-            			wildcardTopicsToUntypedHandlers.getOrDefault(truncatedTopic, emptyMap()), 
-            			topic, convertibleEventData));
-            } while (truncatedTopic.length() > 0);
-
+            List<EventTask> wildcardDeliveries = findWildcardTasks(topic, convertibleEventData,
+            		s -> toTypedEventTasks(wildcardTopicsToTypedHandlers.getOrDefault(s, emptyMap()), 
+					topic, convertibleEventData),
+            		s -> toUntypedEventTasks(wildcardTopicsToUntypedHandlers.getOrDefault(s, emptyMap()), 
+					topic, convertibleEventData));
+            
             deliveryTasks = new ArrayList<>(typedDeliveries.size() + untypedDeliveries.size() + wildcardDeliveries.size());
 
             deliveryTasks.addAll(typedDeliveries);
@@ -505,18 +556,36 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
             deliveryTasks.addAll(wildcardDeliveries);
             
             if (deliveryTasks.isEmpty()) {
-                if(_log.isDebugEnabled()) {
-                	_log.debug("Unhandled Event Handlers are being used for event sent to topic {}", topic);
-                }
-                deliveryTasks = unhandledEventHandlers.stream()
-                        .map(handler -> new UnhandledEventTask(topic, convertibleEventData, handler)).collect(toList());
+				if(_log.isDebugEnabled()) {
+					_log.debug("Unhandled Event Handlers are being used for event sent to topic {}", topic);
+				}
+                deliveryTasks.addAll(toUnhandledEventTasks(topicsToUnhandledHandlers.getOrDefault(topic, emptyMap()), 
+                		topic, convertibleEventData));
+                deliveryTasks.addAll(findWildcardTasks(topic, convertibleEventData, 
+                		s -> toUnhandledEventTasks(wildcardTopicsToUnhandledHandlers.getOrDefault(s, emptyMap()), 
+                				topic, convertibleEventData)));
             }
+            // This occurs inside the lock to ensure history replay doesn't miss events
+            queue.add(new MonitorEventTask(topic, convertibleEventData, monitorImpl));
         }
-
-        queue.add(new MonitorEventTask(topic, convertibleEventData, monitorImpl));
 
         queue.addAll(deliveryTasks);
     }
+
+	@SafeVarargs
+	private final List<EventTask> findWildcardTasks(String topic, EventConverter convertibleEventData,
+			Function<String, List<? extends EventTask>>... additions) {
+		List<EventTask> wildcardDeliveries = new ArrayList<>();
+		String truncatedTopic = topic;
+		do {
+			int idx = truncatedTopic.lastIndexOf('/', truncatedTopic.length() - 2);
+			truncatedTopic = idx > 0 ? truncatedTopic.substring(0, idx + 1) : "";
+			for(Function<String, List<? extends EventTask>> f : additions) {
+				wildcardDeliveries.addAll(f.apply(truncatedTopic));
+			}
+		} while (truncatedTopic.length() > 0);
+		return wildcardDeliveries;
+	}
     
     private List<EventTask> toTypedEventTasks(Map<TypedEventHandler<?>, EventSelector> map, 
     		String topic, EventConverter convertibleEventData) {
@@ -543,14 +612,26 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
     	return list;
     }
 
-    private void checkTopicSyntax(String topic) {
+    private List<EventTask> toUnhandledEventTasks(Map<UnhandledEventHandler, EventSelector> map, 
+    		String topic, EventConverter convertibleEventData) {
+    	List<EventTask> list = new ArrayList<>();
+    	for(Entry<UnhandledEventHandler, EventSelector> e : map.entrySet()) {
+    		if(e.getValue().matches(topic, convertibleEventData)) {
+    			UnhandledEventHandler handler = e.getKey();
+    			list.add(new UnhandledEventTask(topic, convertibleEventData, handler));
+    		}
+    	}
+    	return list;
+    }
+
+    static void checkTopicSyntax(String topic) {
     	String msg = checkTopicSyntax(topic, false);
     	if(msg != null) {
     		throw new IllegalArgumentException(msg);
     	}
     }
     
-    private String checkTopicSyntax(String topic, boolean wildcardPermitted) {
+    static String checkTopicSyntax(String topic, boolean wildcardPermitted) {
     	
     	if(topic == null) {
     		throw new IllegalArgumentException("The topic name is not permitted to be null");
@@ -577,9 +658,6 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
     		}
 
     		if('+' == c) {
-    			if(!allowSingleLevelWildcards) {
-    				return "Single Level Wildcard topics are not part of Typed Events 1.0, and must be explicitly enabled using \"extended.wildcards.enabled\"";
-    			}
     			if(!wildcardPermitted) {
     				return "Single Level Wildcard topics may not be used for sending events";
     			}
@@ -651,4 +729,71 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
         }
 
     }
+
+	@Override
+	public <T> TypedEventPublisher<T> createPublisher(Class<T> eventType) {
+		Objects.requireNonNull(eventType, "The event type must not be null");
+        String topicName = eventType.getName().replace('.', '/');
+        checkTopicSyntax(topicName);
+		return new TypedEventPublisherImpl<>(topicName);
+	}
+
+	@Override
+	public <T> TypedEventPublisher<T> createPublisher(String topic, Class<T> eventType) {
+		Objects.requireNonNull(topic, "The event topic must not be null");
+		Objects.requireNonNull(eventType, "The event type must not be null");
+		checkTopicSyntax(topic);
+		return new TypedEventPublisherImpl<>(topic);
+	}
+
+	@Override
+	public TypedEventPublisher<Object> createPublisher(String topic) {
+		Objects.requireNonNull(topic, "The event topic must not be null");
+		checkTopicSyntax(topic);
+		return new TypedEventPublisherImpl<>(topic);
+	}
+	
+	private class TypedEventPublisherImpl<T> implements TypedEventPublisher<T> {
+
+		private final String topic;
+		
+		private final AtomicBoolean open = new AtomicBoolean(true);
+		
+		public TypedEventPublisherImpl(String topic) {
+			this.topic = topic;
+		}
+
+		private void checkOpen() {
+			if(!open.get()) {
+				throw new IllegalStateException("The TypedEventPublisher for topic " + topic + " is closed.");
+			}
+		}
+		
+		@Override
+		public void deliver(T event) {
+			checkOpen();
+			TypedEventBusImpl.this.deliver(topic, event, EventConverter::forTypedEvent);
+		}
+
+		@Override
+		public void deliverUntyped(Map<String, ?> event) {
+			checkOpen();
+			TypedEventBusImpl.this.deliver(topic, event, EventConverter::forUntypedEvent);
+		}
+
+		@Override
+		public String getTopic() {
+			return topic;
+		}
+
+		@Override
+		public void close() {
+			open.set(false);
+		}
+
+		@Override
+		public boolean isOpen() {
+			return open.get();
+		}
+	}
 }

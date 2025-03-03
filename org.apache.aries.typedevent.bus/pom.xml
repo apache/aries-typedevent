@@ -14,7 +14,7 @@
     <parent>
         <groupId>org.apache.aries.typedevent</groupId>
         <artifactId>typedevent-parent</artifactId>
-        <version>1.0.1-SNAPSHOT</version>
+        <version>1.1.0-SNAPSHOT</version>
         <relativePath>../</relativePath>
     </parent>
     
@@ -82,6 +82,10 @@
             <artifactId>org.osgi.test.junit5</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.osgi</groupId>
+            <artifactId>org.osgi.test.junit5.cm</artifactId>
+        </dependency>
+        <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
         </dependency>
@@ -89,6 +93,37 @@
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-core</artifactId>
         </dependency>
+        
+        <!-- Temporary additions to compile the OSGi interfaces -->
+        <dependency>
+			<groupId>org.osgi</groupId>
+			<artifactId>org.osgi.annotation.bundle</artifactId>
+		</dependency>
+        <dependency>
+			<groupId>org.osgi</groupId>
+			<artifactId>org.osgi.service.component.annotations</artifactId>
+		</dependency>
+        <dependency>
+			<groupId>org.osgi</groupId>
+			<artifactId>org.osgi.namespace.implementation</artifactId>
+			<version>1.0.0</version>
+		</dependency>
+		<dependency>
+			<groupId>org.osgi</groupId>
+			<artifactId>org.osgi.util.pushstream</artifactId>
+			<version>1.0.0</version>
+		</dependency>
+		<dependency>
+			<groupId>org.osgi</groupId>
+			<artifactId>org.osgi.util.function</artifactId>
+			<version>1.1.0</version>
+		</dependency>
+		<dependency>
+			<groupId>org.osgi</groupId>
+			<artifactId>org.osgi.util.promise</artifactId>
+			<version>1.1.0</version>
+			<scope>runtime</scope>
+		</dependency>
     </dependencies>
     
     <build>

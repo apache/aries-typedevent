@@ -21,7 +21,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
 import java.util.stream.Stream;
 
 import org.apache.aries.typedevent.bus.impl.EventConverterTest.NestedEventHolderNotAProperDTO;
@@ -51,7 +52,7 @@ public class EventSelectorTest {
     @ParameterizedTest
     @MethodSource("getTopicMatchingData")
     public void testTopicMatching(String topic, String topicFilter, boolean expectedResult) {
-        assertEquals(expectedResult, new EventSelector(topicFilter, null).matches(topic, null));
+        assertEquals(expectedResult, new EventSelector(topicFilter, null).matches(topic, new HashMap<>()));
     }
     
     /**
@@ -59,7 +60,7 @@ public class EventSelectorTest {
      * @return
      */
     static Stream<Arguments> getTopicMatchingData() {
-    	return Arrays.asList(
+    	return List.of(
     				// Basic
     				Arguments.of("foo", "foo", true),
     				Arguments.of("foo/bar", "foo", false),

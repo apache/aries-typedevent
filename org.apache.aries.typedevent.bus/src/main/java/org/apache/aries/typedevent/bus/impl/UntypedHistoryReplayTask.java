@@ -14,32 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.aries.typedevent.bus.impl;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.List;
 
-class MonitorEventTask extends EventTask {
+import org.osgi.service.typedevent.UntypedEventHandler;
+import org.osgi.service.typedevent.monitor.MonitorEvent;
 
-	private static final Logger _log = LoggerFactory.getLogger(MonitorEventTask.class);
-	
-    private final String eventType;
-    private final EventConverter eventData;
-    private final TypedEventMonitorImpl monitorImpl;
+public class UntypedHistoryReplayTask extends HistoryReplayTask {
 
-    public MonitorEventTask(String eventType, EventConverter eventData, TypedEventMonitorImpl monitorImpl) {
-        super();
-        this.eventType = eventType;
-        this.eventData = eventData;
-        this.monitorImpl = monitorImpl;
-    }
+	private final UntypedEventHandler handler;
 
-    @Override
-    protected void unsafeNotify() throws Exception {    	
-    	if(_log.isDebugEnabled()) {
-    		_log.debug("Distributing event to the event monitor");
-    	}
-    	monitorImpl.event(eventType, eventData.toUntypedEvent());
-    }
+	public UntypedHistoryReplayTask(TypedEventMonitorImpl monitorImpl, UntypedEventHandler handler, List<EventSelector> selectors, Integer history) {
+		super(monitorImpl, selectors, history);
+		this.handler = handler;
+	}
+
+	@Override
+	protected void notifyListener(MonitorEvent me) {
+		handler.notifyUntyped(me.topic, me.eventData);
+	}
+
 }
