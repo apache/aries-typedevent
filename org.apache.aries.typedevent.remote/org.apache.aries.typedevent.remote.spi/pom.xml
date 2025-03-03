@@ -14,7 +14,7 @@
     <parent>
         <groupId>org.apache.aries.typedevent</groupId>
         <artifactId>typedevent-parent</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>1.0.0</version>
         <relativePath>../..</relativePath>
     </parent>
     
@@ -49,7 +49,7 @@
         <dependency>
             <groupId>org.apache.aries.typedevent.remote</groupId>
             <artifactId>org.apache.aries.typedevent.remote.api</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
+            <version>1.0.0</version>
         </dependency>
     </dependencies>
     
