@@ -37,8 +37,8 @@ class MonitorEventTask extends EventTask {
 
     @Override
     protected void unsafeNotify() throws Exception {    	
-    	if(_log.isDebugEnabled()) {
-    		_log.debug("Distributing event to the event monitor");
+    	if(_log.isTraceEnabled()) {
+    		_log.trace("Distributing event to the event monitor");
     	}
     	monitorImpl.event(eventType, eventData.toUntypedEvent());
     }
