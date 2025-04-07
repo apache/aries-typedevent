@@ -22,6 +22,7 @@ import static java.util.stream.Collectors.toMap;
 import java.lang.reflect.RecordComponent;
 import java.lang.reflect.Type;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.osgi.util.converter.ConversionException;
@@ -60,8 +61,10 @@ public class RecordConverter {
         		}
         		return createRecord(clz, args, argTypes);
         	} else {
-        		Map<String, Object> converted = Arrays.stream(sourceComponents)
-        				.collect(toMap(RecordComponent::getName, rc -> getComponentValue(rc, o)));
+        		Map<String, Object> converted = new HashMap<>(sourceComponents.length);
+        		for(RecordComponent rc : sourceComponents) {
+        			converted.put(rc.getName(), getComponentValue(rc, o));
+        		}
         		
         		return converter.convert(converted).to(target);
         	}
