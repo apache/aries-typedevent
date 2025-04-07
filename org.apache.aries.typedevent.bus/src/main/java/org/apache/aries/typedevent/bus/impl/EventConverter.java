@@ -286,8 +286,8 @@ public class EventConverter {
         			return untypedEventDataForFiltering;
         		}
         	} else {
-        		if(_log.isDebugEnabled()) {
-        			_log.debug("Converting {} to untyped data", originalEvent);
+        		if(_log.isTraceEnabled()) {
+        			_log.trace("Converting {} to untyped data", originalEvent);
         		}
         		untypedEventDataForFiltering = eventConverter.convert(originalEvent).sourceAsDTO().to(MAP_WITH_STRING_KEYS);
         	}
