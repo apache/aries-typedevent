@@ -33,6 +33,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.osgi.framework.BundleContext;
 import org.osgi.service.typedevent.TypedEventBus;
 import org.osgi.service.typedevent.TypedEventHandler;
+import org.osgi.service.typedevent.UntypedEventHandler;
 import org.osgi.test.common.annotation.InjectBundleContext;
 import org.osgi.test.common.annotation.InjectService;
 import org.osgi.test.junit5.context.BundleContextExtension;
@@ -63,6 +64,9 @@ public class RecordIntegrationTest extends AbstractIntegrationTest {
 
     @Mock
     TestRecordListener recordEventHandler;
+
+    @Mock
+    UntypedEventHandler untypedEventHandler;
 
     @Test
     public void testUnFilteredListenerEventToRecord() throws Exception {
@@ -137,6 +141,42 @@ public class RecordIntegrationTest extends AbstractIntegrationTest {
     	
     	Mockito.verify(recordEventHandler, Mockito.timeout(1000))
     	.notify(Mockito.eq(TOPIC), Mockito.argThat(isTestRecordWithMessage("foobar")));
+    	
+    }
+
+    @Test
+    public void testUnFilteredListenerRecordToMap() throws Exception {
+    	Dictionary<String, Object> props = new Hashtable<>();
+    	props.put(TYPED_EVENT_TOPICS, TOPIC);
+    	
+    	regs.add(context.registerService(TypedEventHandler.class, typedEventHandler, props));
+    	
+    	props = new Hashtable<>();
+    	props.put(TYPED_EVENT_TOPICS, TOPIC);
+    	
+    	regs.add(context.registerService(UntypedEventHandler.class, untypedEventHandler, props));
+    	
+    	// Record to Map
+    	TestRecord2 testRecord2 = new TestRecord2("foobar", 5);
+    	
+    	eventBus.deliver(TOPIC, testRecord2);
+    	
+    	Mockito.verify(typedEventHandler, Mockito.timeout(1000))
+    	.notify(Mockito.eq(TOPIC), Mockito.argThat(isTestEventWithMessage("foobar")));
+    	
+    	Mockito.verify(untypedEventHandler, Mockito.timeout(1000))
+    	.notifyUntyped(Mockito.eq(TOPIC), Mockito.argThat(isUntypedTestEventWithMessage("foobar")));
+
+    	// Record to Map with null
+    	testRecord2 = new TestRecord2(null, 5);
+    	
+    	eventBus.deliver(TOPIC, testRecord2);
+    	
+    	Mockito.verify(typedEventHandler, Mockito.timeout(1000))
+    	.notify(Mockito.eq(TOPIC), Mockito.argThat(isTestEventWithMessage(null)));
+    	
+    	Mockito.verify(untypedEventHandler, Mockito.timeout(1000))
+    	.notifyUntyped(Mockito.eq(TOPIC), Mockito.argThat(isUntypedTestEventWithMessage(null)));
     	
     }
 
@@ -249,6 +289,43 @@ public class RecordIntegrationTest extends AbstractIntegrationTest {
     	
     	Mockito.verify(recordEventHandler, Mockito.timeout(1000))
     	.notify(Mockito.eq(TOPIC), Mockito.argThat(isTestRecordWithMessage("bar")));
+    	
+    	Mockito.verify(typedEventHandler, Mockito.after(1000).never())
+    	.notify(Mockito.eq(TOPIC), Mockito.argThat(isTestEventWithMessage("bar")));
+    }
+
+    @Test
+    public void testFilteredListenerRecordToMap() throws Exception {
+    	Dictionary<String, Object> props = new Hashtable<>();
+    	props.put(TYPED_EVENT_FILTER, "(message=foo)");
+    	props.put(TYPED_EVENT_TOPICS, TOPIC);
+    	
+    	regs.add(context.registerService(TypedEventHandler.class, typedEventHandler, props));
+    	
+    	props = new Hashtable<>();
+    	props.put(TYPED_EVENT_FILTER, "(message=bar)");
+    	props.put(TYPED_EVENT_TOPICS, TOPIC);
+    	
+    	regs.add(context.registerService(UntypedEventHandler.class, untypedEventHandler, props));
+    	
+    	// Record to Record
+    	TestRecord2 testRecord2 = new TestRecord2("foo", 5);
+    	
+    	eventBus.deliver(TOPIC, testRecord2);
+    	
+    	Mockito.verify(typedEventHandler, Mockito.timeout(1000))
+    	.notify(Mockito.eq(TOPIC), Mockito.argThat(isTestEventWithMessage("foo")));
+    	
+    	Mockito.verify(untypedEventHandler, Mockito.after(1000).never())
+    	.notifyUntyped(Mockito.eq(TOPIC), Mockito.argThat(isUntypedTestEventWithMessage("foo")));
+    	
+    	
+    	testRecord2 = new TestRecord2("bar", 5);
+    	
+    	eventBus.deliver(TOPIC, testRecord2);
+    	
+    	Mockito.verify(untypedEventHandler, Mockito.timeout(1000))
+    	.notifyUntyped(Mockito.eq(TOPIC), Mockito.argThat(isUntypedTestEventWithMessage("bar")));
     	
     	Mockito.verify(typedEventHandler, Mockito.after(1000).never())
     	.notify(Mockito.eq(TOPIC), Mockito.argThat(isTestEventWithMessage("bar")));

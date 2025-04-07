@@ -19,6 +19,7 @@ package org.apache.aries.typedevent.bus.osgi;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.apache.aries.typedevent.bus.common.TestEvent;
 import org.apache.aries.typedevent.bus.common.TestEvent2;
@@ -55,7 +56,7 @@ public abstract class AbstractIntegrationTest {
             
             @Override
             public boolean matches(TestEvent argument) {
-                return message.equals(argument.message);
+                return argument != null && Objects.equals(message, argument.message);
             }
         };
     }
@@ -65,7 +66,7 @@ public abstract class AbstractIntegrationTest {
             
             @Override
             public boolean matches(TestEvent2 argument) {
-                return message.equals(argument.subEvent.message);
+            	return argument != null && Objects.equals(message, argument.subEvent.message);
             }
         };
     }
@@ -75,7 +76,7 @@ public abstract class AbstractIntegrationTest {
             
             @Override
             public boolean matches(Map<String, Object> argument) {
-                return argument != null && message.equals(argument.get("message"));
+                return argument != null && Objects.equals(message, argument.get("message"));
             }
         };
     }
