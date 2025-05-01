@@ -20,14 +20,14 @@
 
     <groupId>org.apache.aries.typedevent</groupId>
     <artifactId>typedevent-parent</artifactId>
-    <version>1.0.1</version>
+    <version>1.0.2-SNAPSHOT</version>
     <packaging>pom</packaging>
     <description>Apache Aries Typed Events Parent.</description>
     <scm>
         <connection>scm:git:http://gitbox.apache.org/repos/asf/aries-typedevent.git</connection>
         <developerConnection>scm:git:https://gitbox.apache.org/repos/asf/aries-typedevent.git</developerConnection>
         <url>https://gitbox.apache.org/repos/asf?p=aries-typedevent.git</url>
-        <tag>typedevent-parent-1.0.1</tag>
+        <tag>typedevent-parent-1.0.0</tag>
     </scm>
 
     <repositories>
