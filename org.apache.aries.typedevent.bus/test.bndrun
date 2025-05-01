@@ -54,6 +54,6 @@
 	org.apache.aries.component-dsl.component-dsl;version='[1.2.2,1.2.3)',\
 	org.apache.felix.configadmin;version='[1.9.26,1.9.27)',\
 	slf4j.api;version='[1.7.30,1.7.31)',\
-	org.apache.aries.typedevent.bus;version='[1.0.0,1.0.1)',\
-	org.apache.aries.typedevent.bus-tests;version='[1.0.0,1.0.1)',\
-	org.mockito.junit-jupiter;version='[5.5.0,5.5.1)'
+	org.mockito.junit-jupiter;version='[5.5.0,5.5.1)',\
+	org.apache.aries.typedevent.bus;version='[1.0.1,1.0.2)',\
+	org.apache.aries.typedevent.bus-tests;version='[1.0.1,1.0.2)'

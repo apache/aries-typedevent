@@ -52,8 +52,8 @@
 	org.opentest4j;version='[1.3.0,1.3.1)',\
 	org.osgi.test.common;version='[1.2.1,1.2.2)',\
 	org.osgi.test.junit5;version='[1.2.1,1.2.2)',\
-	org.apache.aries.typedevent.bus;version='[1.0.0,1.0.1)',\
-	org.apache.aries.typedevent.remote.api;version='[1.0.0,1.0.1)',\
-	org.apache.aries.typedevent.remote.remoteservices;version='[1.0.0,1.0.1)',\
-	org.apache.aries.typedevent.remote.remoteservices-tests;version='[1.0.0,1.0.1)',\
-	org.apache.aries.typedevent.remote.spi;version='[1.0.0,1.0.1)'
+	org.apache.aries.typedevent.bus;version='[1.0.1,1.0.2)',\
+	org.apache.aries.typedevent.remote.api;version='[1.0.1,1.0.2)',\
+	org.apache.aries.typedevent.remote.remoteservices;version='[1.0.1,1.0.2)',\
+	org.apache.aries.typedevent.remote.remoteservices-tests;version='[1.0.1,1.0.2)',\
+	org.apache.aries.typedevent.remote.spi;version='[1.0.1,1.0.2)'
