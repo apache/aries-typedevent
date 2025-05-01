@@ -14,7 +14,7 @@
     <parent>
         <groupId>org.apache.aries.typedevent</groupId>
         <artifactId>typedevent-parent</artifactId>
-        <version>1.0.1-SNAPSHOT</version>
+        <version>1.0.1</version>
         <relativePath>../..</relativePath>
     </parent>
     

@@ -14,7 +14,7 @@
     <parent>
         <groupId>org.apache.aries.typedevent</groupId>
         <artifactId>typedevent-parent</artifactId>
-        <version>1.0.1-SNAPSHOT</version>
+        <version>1.0.1</version>
         <relativePath>../..</relativePath>
     </parent>
     <groupId>org.apache.aries.typedevent.remote.remoteservices</groupId>
@@ -48,7 +48,7 @@
         <dependency>
             <groupId>org.apache.aries.typedevent.remote</groupId>
             <artifactId>org.apache.aries.typedevent.remote.spi</artifactId>
-            <version>1.0.1-SNAPSHOT</version>
+            <version>1.0.1</version>
         </dependency>
         <dependency>
             <groupId>org.osgi</groupId>
@@ -73,7 +73,7 @@
         <dependency>
             <groupId>org.apache.aries.typedevent</groupId>
             <artifactId>org.apache.aries.typedevent.bus</artifactId>
-            <version>1.0.1-SNAPSHOT</version>
+            <version>1.0.1</version>
             <scope>test</scope>
         </dependency>
         <dependency>
