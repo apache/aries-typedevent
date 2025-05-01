@@ -61,7 +61,8 @@ public class RecordConverter {
         		}
         		return createRecord(clz, args, argTypes);
         	} else {
-        		Map<String, Object> converted = new HashMap<>(sourceComponents.length);
+        		// Avoid rehashing on insertion and reduce the iteration overhead of empty buckets 
+        		Map<String, Object> converted = new HashMap<>((int) (sourceComponents.length / 0.9f + 1.0f), 0.9f);
         		for(RecordComponent rc : sourceComponents) {
         			converted.put(rc.getName(), getComponentValue(rc, o));
         		}
