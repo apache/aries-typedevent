@@ -20,7 +20,6 @@ package org.apache.aries.typedevent.bus.impl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.Collections;
-import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,46 +29,40 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.osgi.service.typedevent.monitor.RangePolicy;
 
 @ExtendWith(MockitoExtension.class)
-public class TypedEventMonitorImplTest {
+class TypedEventMonitorImplTest {
 
-    private static final String TOPIC = "a/b/c";
+	private static final String TOPIC = "a/b/c";
 	TypedEventMonitorImpl monitorImpl;
 
-    @BeforeEach
-    public void start() throws ClassNotFoundException {
-        Map<String, Object> config = Collections.emptyMap();
-        
-        monitorImpl = new TypedEventMonitorImpl(config);
-    }
-    
-    @AfterEach
-    public void stop() throws Exception {
-        monitorImpl.destroy();
-    }
+	@BeforeEach
+	void start() {
+		monitorImpl = new TypedEventMonitorImpl(Collections.emptyMap());
+	}
 
-    /**
-     * Tests that events are delivered to Smart Behaviours based on type
-     * 
-     * @throws InterruptedException
-     */
-    @Test
-    public void testConfigureHistoryStorage() throws InterruptedException {
-        checkRangeConfiguration(RangePolicy.unlimited());
-        checkRangeConfiguration(RangePolicy.atLeast(0));
-        checkRangeConfiguration(RangePolicy.range(0,Integer.MAX_VALUE));
-        checkRangeConfiguration(RangePolicy.atLeast(10));
-        checkRangeConfiguration(RangePolicy.range(1,Integer.MAX_VALUE));
+	@AfterEach
+	void stop() {
+		monitorImpl.destroy();
+	}
 
-    }
+	/**
+	 * Tests history storage size configuration
+	 */
+	@Test
+	void testConfigureHistoryStorage() {
+		checkRangeConfiguration(RangePolicy.unlimited());
+		checkRangeConfiguration(RangePolicy.atLeast(0));
+		checkRangeConfiguration(RangePolicy.range(0, Integer.MAX_VALUE));
+		checkRangeConfiguration(RangePolicy.atLeast(10));
+		checkRangeConfiguration(RangePolicy.range(1, Integer.MAX_VALUE));
+	}
 
 	private void checkRangeConfiguration(final RangePolicy policy) {
 		monitorImpl.configureHistoryStorage(TOPIC, policy);
 		RangePolicy configured = monitorImpl.getConfiguredHistoryStorage(TOPIC);
 		assertEquals(policy.getMinimum(), configured.getMinimum());
 		assertEquals(policy.getMaximum(), configured.getMaximum());
-		RangePolicy effective = monitorImpl.getConfiguredHistoryStorage(TOPIC);
+		RangePolicy effective = monitorImpl.getEffectiveHistoryStorage(TOPIC);
 		assertEquals(effective.getMinimum(), effective.getMinimum());
 		assertEquals(policy.getMaximum(), effective.getMaximum());
 	}
-
 }
