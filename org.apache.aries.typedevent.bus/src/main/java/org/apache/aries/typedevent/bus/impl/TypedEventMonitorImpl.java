@@ -370,7 +370,7 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 	}
 
 	private void updateRestrictedHistory(String topicFilter, int minRequired, int maxRequired) {
-		TopicHistory newHistory = new TopicHistory(minRequired, maxRequired);
+		TopicHistory newHistory = new TopicHistory(minRequired, Math.min(historySize, maxRequired));
 		TopicHistory oldHistory = topicsWithRestrictedHistories.put(topicFilter, newHistory);
 		if(oldHistory != null) {
 			List<MonitorEvent> toRemove = newHistory.copyFrom(oldHistory);
