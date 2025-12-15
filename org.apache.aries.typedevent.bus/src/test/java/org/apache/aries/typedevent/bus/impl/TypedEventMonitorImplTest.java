@@ -17,7 +17,9 @@
 
 package org.apache.aries.typedevent.bus.impl;
 
+import static org.junit.Assert.assertNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Collections;
 import java.util.Map;
@@ -32,8 +34,10 @@ import org.osgi.service.typedevent.monitor.RangePolicy;
 @ExtendWith(MockitoExtension.class)
 public class TypedEventMonitorImplTest {
 
+    private static final String TOPIC_PATTERN_MULTI = "a/*";
+    private static final String TOPIC_PATTERN_SINGLE = "a/b/+";
     private static final String TOPIC = "a/b/c";
-	TypedEventMonitorImpl monitorImpl;
+    TypedEventMonitorImpl monitorImpl;
 
     @BeforeEach
     public void start() throws ClassNotFoundException {
@@ -48,7 +52,7 @@ public class TypedEventMonitorImplTest {
     }
 
     /**
-     * Tests that events are delivered to Smart Behaviours based on type
+     * Tests that history configuration works for topics
      * 
      * @throws InterruptedException
      */
@@ -59,17 +63,66 @@ public class TypedEventMonitorImplTest {
         checkRangeConfiguration(RangePolicy.range(0,Integer.MAX_VALUE));
         checkRangeConfiguration(RangePolicy.atLeast(10));
         checkRangeConfiguration(RangePolicy.range(1,Integer.MAX_VALUE));
+    }
+    
+    /**
+     * Tests that history configuration works for wildcard topics
+     * 
+     * @throws InterruptedException
+     */
+    @Test
+    public void testConfigureHistoryStorageWildcards() throws InterruptedException {
+    	// Multi-level
+    	checkRangeConfiguration(TOPIC_PATTERN_MULTI, TOPIC, RangePolicy.unlimited());
+    	checkRangeConfiguration(TOPIC_PATTERN_MULTI, TOPIC, RangePolicy.atMost(10));
+    	// Not permitted 
+    	assertThrows(IllegalArgumentException.class, 
+    			() -> checkRangeConfiguration(TOPIC_PATTERN_MULTI, TOPIC, RangePolicy.atLeast(10)));
+    	// Not permitted 
+    	assertThrows(IllegalArgumentException.class, 
+    			() -> checkRangeConfiguration(TOPIC_PATTERN_MULTI, TOPIC, RangePolicy.range(1,Integer.MAX_VALUE)));
 
+    	// Single-level
+    	checkRangeConfiguration(TOPIC_PATTERN_SINGLE, TOPIC, RangePolicy.unlimited());
+    	checkRangeConfiguration(TOPIC_PATTERN_SINGLE, TOPIC, RangePolicy.atMost(10));
+    	// Not permitted 
+    	assertThrows(IllegalArgumentException.class, 
+    			() -> checkRangeConfiguration(TOPIC_PATTERN_SINGLE, TOPIC, RangePolicy.atLeast(10)));
+    	// Not permitted 
+    	assertThrows(IllegalArgumentException.class, 
+    			() -> checkRangeConfiguration(TOPIC_PATTERN_SINGLE, TOPIC, RangePolicy.range(1,Integer.MAX_VALUE)));
     }
 
-	private void checkRangeConfiguration(final RangePolicy policy) {
-		monitorImpl.configureHistoryStorage(TOPIC, policy);
-		RangePolicy configured = monitorImpl.getConfiguredHistoryStorage(TOPIC);
-		assertEquals(policy.getMinimum(), configured.getMinimum());
-		assertEquals(policy.getMaximum(), configured.getMaximum());
-		RangePolicy effective = monitorImpl.getConfiguredHistoryStorage(TOPIC);
-		assertEquals(effective.getMinimum(), effective.getMinimum());
-		assertEquals(policy.getMaximum(), effective.getMaximum());
-	}
+    @Test
+    public void testTooBig() {
+    	int total = monitorImpl.getMaximumEventStorage();
+    	assertThrows(IllegalStateException.class, 
+    			() -> monitorImpl.configureHistoryStorage(TOPIC, RangePolicy.atLeast(total + 1)));
+
+    	RangePolicy half = RangePolicy.atLeast(total / 2);
+    	monitorImpl.configureHistoryStorage("a", half);
+    	monitorImpl.configureHistoryStorage("a/b", half);
+    	
+    	assertThrows(IllegalStateException.class, 
+    			() -> monitorImpl.configureHistoryStorage(TOPIC, half));
+    }
+
+    private void checkRangeConfiguration(final RangePolicy policy) {
+    	checkRangeConfiguration(TOPIC, TOPIC, policy);
+    }
+
+    private void checkRangeConfiguration(String configTopic, String testTopic, final RangePolicy policy) {
+        monitorImpl.configureHistoryStorage(configTopic, policy);
+        RangePolicy configured = monitorImpl.getConfiguredHistoryStorage(testTopic);
+        if(configTopic.equals(testTopic)) {
+            assertEquals(policy.getMinimum(), configured.getMinimum());
+            assertEquals(policy.getMaximum(), configured.getMaximum());
+        } else {
+        	assertNull(configured);
+        }
+        RangePolicy effective = monitorImpl.getEffectiveHistoryStorage(testTopic);
+        assertEquals(policy.getMinimum(), effective.getMinimum());
+        assertEquals(policy.getMaximum(), effective.getMaximum());
+    }
 
 }
