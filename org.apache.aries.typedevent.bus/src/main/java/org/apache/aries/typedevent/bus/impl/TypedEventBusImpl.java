@@ -772,12 +772,14 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
 		@Override
 		public void deliver(T event) {
 			checkOpen();
+			Objects.requireNonNull(event, "The event object must not be null");
 			TypedEventBusImpl.this.deliver(topic, event, EventConverter::forTypedEvent);
 		}
 
 		@Override
 		public void deliverUntyped(Map<String, ?> event) {
 			checkOpen();
+			Objects.requireNonNull(event, "The event map must not be null");
 			TypedEventBusImpl.this.deliver(topic, event, EventConverter::forUntypedEvent);
 		}
 

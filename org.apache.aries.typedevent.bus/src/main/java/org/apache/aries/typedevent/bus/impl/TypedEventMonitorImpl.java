@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -93,6 +94,14 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
     void destroy() {
         source.close();
         monitoringWorker.shutdown();
+        lock.writeLock().lock();
+        try {
+            historicEvents.clear();
+            historyConfiguration.clear();
+            topicsWithRestrictedHistories.clear();
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     void event(String topic, Map<String, Object> eventData) throws InterruptedException {
@@ -257,14 +266,23 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 
 	@Override
 	public Predicate<String> topicFilterMatches(String topicFilter) {
-		TypedEventBusImpl.checkTopicSyntax(topicFilter, true);
+		Objects.requireNonNull(topicFilter, "The topic filter must not be null");
+		String msg = TypedEventBusImpl.checkTopicSyntax(topicFilter, true);
+		if (msg != null) {
+			throw new IllegalArgumentException(msg);
+		}
 		EventSelector selector = new EventSelector(topicFilter, null);
 		return selector::matchesTopic;
 	}
 
 	@Override
 	public boolean topicFilterMatches(String topicName, String topicFilter) {
-		TypedEventBusImpl.checkTopicSyntax(topicFilter, true);
+		Objects.requireNonNull(topicName, "The topic name must not be null");
+		Objects.requireNonNull(topicFilter, "The topic filter must not be null");
+		String msg = TypedEventBusImpl.checkTopicSyntax(topicFilter, true);
+		if (msg != null) {
+			throw new IllegalArgumentException(msg);
+		}
 		TypedEventBusImpl.checkTopicSyntax(topicName);
 		EventSelector selector = new EventSelector(topicFilter, null);
 		return selector.matchesTopic(topicName);
@@ -291,7 +309,11 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 
 	@Override
 	public RangePolicy getConfiguredHistoryStorage(String topicFilter) {
-		TypedEventBusImpl.checkTopicSyntax(topicFilter, true);
+		Objects.requireNonNull(topicFilter, "The topic filter must not be null");
+		String msg = TypedEventBusImpl.checkTopicSyntax(topicFilter, true);
+		if(msg != null) {
+			throw new IllegalArgumentException(msg);
+		}
 		EventSelector selector = new EventSelector(topicFilter, null);
 		lock.readLock().lock();
 		try {
@@ -303,6 +325,7 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 
 	@Override
 	public RangePolicy getEffectiveHistoryStorage(String topicName) {
+		Objects.requireNonNull(topicName, "The topic name must not be null");                                                                                                                                                                                  
 		TypedEventBusImpl.checkTopicSyntax(topicName);
 		lock.readLock().lock();
 		try {
@@ -322,11 +345,14 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 
 	@Override
 	public int configureHistoryStorage(String topicFilter, RangePolicy policy) {
-		
+		Objects.requireNonNull(topicFilter, "The topic filter must not be null");
 		if(policy.getMinimum() > 0) {
 			TypedEventBusImpl.checkTopicSyntax(topicFilter);
 		} else {
-			TypedEventBusImpl.checkTopicSyntax(topicFilter, true);
+			String msg = TypedEventBusImpl.checkTopicSyntax(topicFilter, true);
+			if(msg != null) {
+				throw new IllegalArgumentException(msg);
+			}
 		}
 		
 		EventSelector key = new EventSelector(topicFilter, null);
@@ -380,6 +406,7 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 
 	@Override
 	public void removeHistoryStorage(String topicFilter) {
+		Objects.requireNonNull(topicFilter, "The topic filter must not be null");
 		EventSelector selector = new EventSelector(topicFilter, null);
 		lock.readLock().lock();
 		try {
