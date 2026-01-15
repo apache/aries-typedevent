@@ -52,6 +52,39 @@ public class TypedEventMonitorImplTest {
     }
 
     /**
+     * Tests that null topics and filters are disallowed
+     * 
+     * @throws InterruptedException
+     */
+    @Test
+    public void testNullTopicsAndFilters() throws InterruptedException {
+    	assertThrows(NullPointerException.class, () -> monitorImpl.configureHistoryStorage(null, RangePolicy.exact(1)));
+    	assertThrows(NullPointerException.class, () -> monitorImpl.getConfiguredHistoryStorage(null));
+    	assertThrows(NullPointerException.class, () -> monitorImpl.getEffectiveHistoryStorage(null));
+    	assertThrows(NullPointerException.class, () -> monitorImpl.removeHistoryStorage(null));
+    	assertThrows(NullPointerException.class, () -> monitorImpl.topicFilterMatches(null));
+    	assertThrows(NullPointerException.class, () -> monitorImpl.topicFilterMatches(null, TOPIC_PATTERN_MULTI));
+    	assertThrows(NullPointerException.class, () -> monitorImpl.topicFilterMatches(TOPIC, null));
+    }
+
+    /**
+     * Tests that illegal topics and filters are disallowed
+     * 
+     * @throws InterruptedException
+     */
+    @Test
+    public void testIllegalTopicsAndFilters() throws InterruptedException {
+    	assertThrows(IllegalArgumentException.class, () -> monitorImpl.configureHistoryStorage("//", RangePolicy.exact(1)));
+    	assertThrows(IllegalArgumentException.class, () -> monitorImpl.getConfiguredHistoryStorage("//"));
+    	assertThrows(IllegalArgumentException.class, () -> monitorImpl.getEffectiveHistoryStorage("//"));
+    	assertThrows(IllegalArgumentException.class, () -> monitorImpl.removeHistoryStorage("//"));
+    	assertThrows(IllegalArgumentException.class, () -> monitorImpl.topicFilterMatches("//"));
+    	assertThrows(IllegalArgumentException.class, () -> monitorImpl.topicFilterMatches("//", TOPIC_PATTERN_MULTI));
+    	assertThrows(IllegalArgumentException.class, () -> monitorImpl.topicFilterMatches(TOPIC, "//"));
+    	assertThrows(IllegalArgumentException.class, () -> monitorImpl.configureHistoryStorage("+", RangePolicy.exact(1)));
+    }
+    
+    /**
      * Tests that history configuration works for topics
      * 
      * @throws InterruptedException

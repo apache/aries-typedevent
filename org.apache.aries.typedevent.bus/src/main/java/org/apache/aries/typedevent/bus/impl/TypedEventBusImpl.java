@@ -625,13 +625,22 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
     }
 
     static void checkTopicSyntax(String topic) {
+    	Objects.requireNonNull(topic, "The topic name must not be null");
     	String msg = checkTopicSyntax(topic, false);
     	if(msg != null) {
     		throw new IllegalArgumentException(msg);
     	}
     }
+
+    static void checkTopicFilterSyntax(String topic) {
+    	Objects.requireNonNull(topic, "The topic filter must not be null");
+    	String msg = checkTopicSyntax(topic, true);
+    	if(msg != null) {
+    		throw new IllegalArgumentException(msg);
+    	}
+    }
     
-    static String checkTopicSyntax(String topic, boolean wildcardPermitted) {
+    private static String checkTopicSyntax(String topic, boolean wildcardPermitted) {
     	
     	if(topic == null) {
     		throw new IllegalArgumentException("The topic name is not permitted to be null");
@@ -740,15 +749,13 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
 
 	@Override
 	public <T> TypedEventPublisher<T> createPublisher(String topic, Class<T> eventType) {
-		Objects.requireNonNull(topic, "The event topic must not be null");
-		Objects.requireNonNull(eventType, "The event type must not be null");
 		checkTopicSyntax(topic);
+		Objects.requireNonNull(eventType, "The event type must not be null");
 		return new TypedEventPublisherImpl<>(topic);
 	}
 
 	@Override
 	public TypedEventPublisher<Object> createPublisher(String topic) {
-		Objects.requireNonNull(topic, "The event topic must not be null");
 		checkTopicSyntax(topic);
 		return new TypedEventPublisherImpl<>(topic);
 	}
@@ -772,12 +779,14 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
 		@Override
 		public void deliver(T event) {
 			checkOpen();
+			Objects.requireNonNull(event);
 			TypedEventBusImpl.this.deliver(topic, event, EventConverter::forTypedEvent);
 		}
 
 		@Override
 		public void deliverUntyped(Map<String, ?> event) {
 			checkOpen();
+			Objects.requireNonNull(event);
 			TypedEventBusImpl.this.deliver(topic, event, EventConverter::forUntypedEvent);
 		}
 

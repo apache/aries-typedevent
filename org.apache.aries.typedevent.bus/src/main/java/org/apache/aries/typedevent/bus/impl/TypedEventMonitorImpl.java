@@ -257,14 +257,14 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 
 	@Override
 	public Predicate<String> topicFilterMatches(String topicFilter) {
-		TypedEventBusImpl.checkTopicSyntax(topicFilter, true);
+		TypedEventBusImpl.checkTopicFilterSyntax(topicFilter);
 		EventSelector selector = new EventSelector(topicFilter, null);
 		return selector::matchesTopic;
 	}
 
 	@Override
 	public boolean topicFilterMatches(String topicName, String topicFilter) {
-		TypedEventBusImpl.checkTopicSyntax(topicFilter, true);
+		TypedEventBusImpl.checkTopicFilterSyntax(topicFilter);
 		TypedEventBusImpl.checkTopicSyntax(topicName);
 		EventSelector selector = new EventSelector(topicFilter, null);
 		return selector.matchesTopic(topicName);
@@ -291,7 +291,7 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 
 	@Override
 	public RangePolicy getConfiguredHistoryStorage(String topicFilter) {
-		TypedEventBusImpl.checkTopicSyntax(topicFilter, true);
+		TypedEventBusImpl.checkTopicFilterSyntax(topicFilter);
 		EventSelector selector = new EventSelector(topicFilter, null);
 		lock.readLock().lock();
 		try {
@@ -326,7 +326,7 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 		if(policy.getMinimum() > 0) {
 			TypedEventBusImpl.checkTopicSyntax(topicFilter);
 		} else {
-			TypedEventBusImpl.checkTopicSyntax(topicFilter, true);
+			TypedEventBusImpl.checkTopicFilterSyntax(topicFilter);
 		}
 		
 		EventSelector key = new EventSelector(topicFilter, null);
@@ -380,6 +380,7 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
 
 	@Override
 	public void removeHistoryStorage(String topicFilter) {
+		TypedEventBusImpl.checkTopicFilterSyntax(topicFilter);
 		EventSelector selector = new EventSelector(topicFilter, null);
 		lock.readLock().lock();
 		try {

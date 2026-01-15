@@ -138,7 +138,37 @@ public class TypedEventBusImplTest {
         impl.stop();
         monitorImpl.destroy();
     }
+    
+    /**
+     * Tests that null topics and filters are disallowed
+     * 
+     * @throws InterruptedException
+     */
+    @Test
+    public void testNullTopicsAndFilters() throws InterruptedException {
+    	assertThrows(NullPointerException.class, () -> impl.createPublisher((String) null));
+    	assertThrows(NullPointerException.class, () -> impl.createPublisher(null, TestEvent.class));
+    	assertThrows(NullPointerException.class, () -> impl.deliver(null, new TestEvent()));
+    	assertThrows(NullPointerException.class, () -> impl.deliverUntyped(null, new HashMap<>()));
+    }
 
+    /**
+     * Tests that illegal topics and filters are disallowed
+     * 
+     * @throws InterruptedException
+     */
+    @Test
+    public void testIllegalTopicsAndFilters() throws InterruptedException {
+    	assertThrows(IllegalArgumentException.class, () -> impl.createPublisher("//"));
+    	assertThrows(IllegalArgumentException.class, () -> impl.createPublisher("//", TestEvent.class));
+    	assertThrows(IllegalArgumentException.class, () -> impl.deliver("//", new TestEvent()));
+    	assertThrows(IllegalArgumentException.class, () -> impl.deliverUntyped("//", null));
+    	assertThrows(IllegalArgumentException.class, () -> impl.createPublisher("+"));
+    	assertThrows(IllegalArgumentException.class, () -> impl.createPublisher("+", TestEvent.class));
+    	assertThrows(IllegalArgumentException.class, () -> impl.deliver("+", new TestEvent()));
+    	assertThrows(IllegalArgumentException.class, () -> impl.deliverUntyped("+", null));
+    }
+    
     /**
      * Tests that events are delivered to Smart Behaviours based on type
      * 
@@ -694,6 +724,9 @@ public class TypedEventBusImplTest {
         impl.addUntypedEventHandler(untypedHandlerB, serviceProperties);
 
         TypedEventPublisher<TestEvent> publisher = impl.createPublisher(TestEvent.class);
+        
+        assertThrows(NullPointerException.class, () -> publisher.deliver(null));
+        assertThrows(NullPointerException.class, () -> publisher.deliverUntyped(null));
         
         publisher.deliver(event);
 
