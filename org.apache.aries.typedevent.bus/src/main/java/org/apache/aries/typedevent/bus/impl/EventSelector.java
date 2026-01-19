@@ -207,46 +207,62 @@ public class EventSelector implements Comparable<EventSelector> {
 	}
 
 	@Override
+	/**
+	 * A lower value indicates a more specific match (according to the algorithm
+	 * in the specification)
+	 */
 	public int compareTo(EventSelector o) {
-		if(isWildcard()) { 
-			if(!o.isWildcard()) {
-				return 1;
-			}
-		} else if(o.isWildcard()) {
-			return -1;
+		int result;
+		if(isWildcard()) {
+			// Either both wildcards, or the non wildcard is more specific (lower)
+			result = o.isWildcard() ? compareWildcards(o) : 1;
 		} else {
-			return initial.compareTo(o.initial);
+			// If o is a wildcard this is more specific (lower), 
+			// otherwise lexical comparison of filter strings
+			result = o.isWildcard() ? -1 : initial.compareTo(o.initial);
 		}
 		
+		return result;
+	}
+
+	private int compareWildcards(EventSelector o) {
+		// The longer initial number of tokens is more specific
 		int compare = tokenCount(o.initial) - tokenCount(initial);
 		
+		// This loop only executes if the initial tokens were the same length
 		for(int i = 0; compare == 0 && i < additionalSegments.size(); i++) {
 			if(o.additionalSegments.size() > i) {
+				// Both have a next (i.e. post '+') segment
+				// the bigger number of tokens is more specific (lower)
 				compare = tokenCount(o.additionalSegments.get(i)) - tokenCount(additionalSegments.get(i));
 			} else {
-				// other is out of segments before we are
-				return 1;
+				// other is out of segments before this is, so this is more specific
+				compare = -1;
 			}
 		}
 		
 		if(compare == 0) {
-			
 			if(o.additionalSegments.size() > additionalSegments.size()) {
-				return -1;
-			}
-			
-			if(isMultiLevelWildcard) {
+				// o has more segments overall so it is more specific 
+				compare = 1;
+			} else if(isMultiLevelWildcard) {
 				if(!o.isMultiLevelWildcard) {
-					return 1;
+					// Multi-level wildcards are the least specific
+					compare = 1;
+				} else {
+					// Both multi-level with the same number of segments
+					// fall back to lexical
+					compare = initial.compareTo(o.initial);
 				}
 			} else if(o.isMultiLevelWildcard) {
-				return -1;
-			}
-			
-			compare = initial.compareTo(o.initial);
-			
-			for(int i = 0; compare == 0 && i < additionalSegments.size(); i++) {
-				compare = additionalSegments.get(i).compareTo(o.additionalSegments.get(i));
+				// Multi Level is least specific
+				compare = -1;
+			} else {
+				// Neither multilevel with the same number of segments
+				// use the first segment which compares in a non zero way
+				for(int i = 0; compare == 0 && i < additionalSegments.size(); i++) {
+					compare = additionalSegments.get(i).compareTo(o.additionalSegments.get(i));
+				}
 			}
 		}
 		
