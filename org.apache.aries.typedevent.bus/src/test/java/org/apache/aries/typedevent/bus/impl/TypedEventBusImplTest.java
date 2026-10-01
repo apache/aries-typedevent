@@ -60,7 +60,7 @@ public class TypedEventBusImplTest {
     private static final String TEST_EVENT_TOPIC = TestEvent.class.getName().replace(".", "/");
     private static final String TEST_EVENT_ML_WILDCARD_TOPIC = "org/apache/aries/typedevent/*";
     private static final String BASE_ML_WILDCARD_TOPIC = "*";
-    
+
     private static final String TEST_EVENT_SL_WILDCARD_TOPIC = "org/apache/+/typedevent/bus/impl/TypedEventBusImplTest$TestEvent";
     private static final String BASE_SL_WILDCARD_TOPIC = "+";
 
@@ -71,9 +71,8 @@ public class TypedEventBusImplTest {
     public static class TestEvent2 {
         public int count;
     }
-    
+
     public static class SpecialTestEvent extends TestEvent {
-        
     }
 
     @Mock(strictness = LENIENT)
@@ -99,7 +98,7 @@ public class TypedEventBusImplTest {
 
         Mockito.doAnswer(i -> TestEvent.class.getClassLoader().loadClass(i.getArgument(0, String.class)))
         	.when(registeringBundle).loadClass(Mockito.anyString());
-        
+
         Mockito.doAnswer(i -> {
             semA.release();
             return null;
@@ -126,13 +125,13 @@ public class TypedEventBusImplTest {
         }).when(unhandledHandler).notifyUnhandled(Mockito.anyString(), Mockito.any());
 
         Map<String, Object> config = Collections.emptyMap();
-        
+
         monitorImpl = new TypedEventMonitorImpl(config);
 
         impl = new TypedEventBusImpl(monitorImpl, config);
         impl.start();
     }
-    
+
     @AfterEach
     public void stop() throws Exception {
         impl.stop();
@@ -171,7 +170,7 @@ public class TypedEventBusImplTest {
     
     /**
      * Tests that events are delivered to Smart Behaviours based on type
-     * 
+     *
      * @throws InterruptedException
      */
     @Test
@@ -230,177 +229,177 @@ public class TypedEventBusImplTest {
 
     /**
      * Tests that events are delivered with Wildcarding
-     * 
+     *
      * @throws InterruptedException
      */
     @Test
     public void testMultiLevelWildcardEventReceiving() throws InterruptedException {
-    	
+
     	TestEvent event = new TestEvent();
     	event.message = "boo";
-    	
+
     	Map<String, Object> serviceProperties = new HashMap<>();
-    	
+
     	serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_ML_WILDCARD_TOPIC);
     	serviceProperties.put(TYPED_EVENT_TYPE, TestEvent.class.getName());
     	serviceProperties.put(SERVICE_ID, 42L);
-    	
+
     	impl.addTypedEventHandler(registeringBundle, handlerA, serviceProperties);
-    	
+
     	serviceProperties = new HashMap<>();
-    	
+
     	serviceProperties.put(TYPED_EVENT_TOPICS, BASE_ML_WILDCARD_TOPIC);
     	serviceProperties.put(TYPED_EVENT_TYPE, TestEvent.class.getName());
     	serviceProperties.put(SERVICE_ID, 43L);
-    	
+
     	impl.addTypedEventHandler(registeringBundle, handlerB, serviceProperties);
-    	
+
     	serviceProperties = new HashMap<>();
-    	
+
     	serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_ML_WILDCARD_TOPIC);
     	serviceProperties.put(SERVICE_ID, 44L);
-    	
+
     	impl.addUntypedEventHandler(untypedHandlerA, serviceProperties);
-    	
+
     	serviceProperties = new HashMap<>();
-    	
+
     	serviceProperties.put(TYPED_EVENT_TOPICS, BASE_ML_WILDCARD_TOPIC);
     	serviceProperties.put(SERVICE_ID, 45L);
-    	
+
     	impl.addUntypedEventHandler(untypedHandlerB, serviceProperties);
-    	
+
     	impl.deliver(event);
-    	
+
     	assertTrue(semA.tryAcquire(1, TimeUnit.SECONDS));
-    	
+
     	Mockito.verify(handlerA).notify(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
     			Mockito.argThat(isTestEventWithMessage("boo")));
-    	
+
     	assertTrue(semB.tryAcquire(1, TimeUnit.SECONDS));
-    	
+
     	Mockito.verify(handlerB).notify(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
     			Mockito.argThat(isTestEventWithMessage("boo")));
-    	
+
     	assertTrue(untypedSemA.tryAcquire(1, TimeUnit.SECONDS));
-    	
+
     	Mockito.verify(untypedHandlerA).notifyUntyped(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
     			Mockito.argThat(isUntypedTestEventWithMessage("boo")));
-    	
+
     	assertTrue(untypedSemB.tryAcquire(1, TimeUnit.SECONDS));
-    	
+
     	Mockito.verify(untypedHandlerB).notifyUntyped(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
     			Mockito.argThat(isUntypedTestEventWithMessage("boo")));
 
     	impl.deliver("some/other/topic", event);
-    	
+
     	assertFalse(semA.tryAcquire(1, TimeUnit.SECONDS));
-    	
+
     	assertTrue(semB.tryAcquire(1, TimeUnit.SECONDS));
-    	
+
     	Mockito.verify(handlerB).notify(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
     			Mockito.argThat(isTestEventWithMessage("boo")));
-    	
+
     	assertFalse(untypedSemA.tryAcquire(1, TimeUnit.SECONDS));
-    	
+
     	assertTrue(untypedSemB.tryAcquire(1, TimeUnit.SECONDS));
-    	
+
     	Mockito.verify(untypedHandlerB).notifyUntyped(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
     			Mockito.argThat(isUntypedTestEventWithMessage("boo")));
     }
 
     /**
      * Tests that events are delivered with Single Level wildcards
-     * 
+     *
      * @throws InterruptedException
      */
     @Test
     public void testSingleLevelWildcardEventReceiving() throws InterruptedException {
-    	
+
     	TestEvent event = new TestEvent();
     	event.message = "boo";
-    	
+
     	Map<String, Object> serviceProperties = new HashMap<>();
-    	
+
     	serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_SL_WILDCARD_TOPIC);
     	serviceProperties.put(TYPED_EVENT_TYPE, TestEvent.class.getName());
     	serviceProperties.put(SERVICE_ID, 42L);
-    	
+
     	impl.addTypedEventHandler(registeringBundle, handlerA, serviceProperties);
-    	
+
     	serviceProperties = new HashMap<>();
-    	
+
     	serviceProperties.put(TYPED_EVENT_TOPICS, BASE_SL_WILDCARD_TOPIC);
     	serviceProperties.put(TYPED_EVENT_TYPE, TestEvent.class.getName());
     	serviceProperties.put(SERVICE_ID, 43L);
-    	
+
     	impl.addTypedEventHandler(registeringBundle, handlerB, serviceProperties);
-    	
+
     	serviceProperties = new HashMap<>();
-    	
+
     	serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_SL_WILDCARD_TOPIC);
     	serviceProperties.put(SERVICE_ID, 44L);
-    	
+
     	impl.addUntypedEventHandler(untypedHandlerA, serviceProperties);
-    	
+
     	serviceProperties = new HashMap<>();
-    	
+
     	serviceProperties.put(TYPED_EVENT_TOPICS, BASE_SL_WILDCARD_TOPIC);
     	serviceProperties.put(SERVICE_ID, 45L);
-    	
+
     	impl.addUntypedEventHandler(untypedHandlerB, serviceProperties);
-    	
+
     	impl.deliver(event);
-    	
+
     	assertTrue(semA.tryAcquire(1, TimeUnit.SECONDS));
-    	
+
     	Mockito.verify(handlerA).notify(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
     			Mockito.argThat(isTestEventWithMessage("boo")));
-    	
+
     	assertFalse(semB.tryAcquire(1, TimeUnit.SECONDS));
-    	
+
     	assertTrue(untypedSemA.tryAcquire(1, TimeUnit.SECONDS));
-    	
+
     	Mockito.verify(untypedHandlerA).notifyUntyped(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
     			Mockito.argThat(isUntypedTestEventWithMessage("boo")));
-    	
+
     	assertFalse(untypedSemB.tryAcquire(1, TimeUnit.SECONDS));
-    	
+
     	String topic = "org/apache/taurus/typedevent/bus/impl/TypedEventBusImplTest$TestEvent";
 		impl.deliver(topic, event);
-    	
+
     	assertTrue(semA.tryAcquire(1, TimeUnit.SECONDS));
-    	
+
     	Mockito.verify(handlerA).notify(Mockito.eq(topic),
     			Mockito.argThat(isTestEventWithMessage("boo")));
 
     	assertFalse(semB.tryAcquire(1, TimeUnit.SECONDS));
-    	
+
     	assertTrue(untypedSemA.tryAcquire(1, TimeUnit.SECONDS));
 
     	Mockito.verify(untypedHandlerA).notifyUntyped(Mockito.eq(topic),
     			Mockito.argThat(isUntypedTestEventWithMessage("boo")));
-    	
+
     	assertFalse(untypedSemB.tryAcquire(1, TimeUnit.SECONDS));
 
     	topic = "org";
     	impl.deliver(topic, event);
-    	
+
     	assertFalse(semA.tryAcquire(1, TimeUnit.SECONDS));
 
     	assertTrue(semB.tryAcquire(1, TimeUnit.SECONDS));
-    	
+
     	Mockito.verify(handlerB).notify(Mockito.eq(topic),
     			Mockito.argThat(isTestEventWithMessage("boo")));
-    	
+
     	assertFalse(untypedSemA.tryAcquire(1, TimeUnit.SECONDS));
 
     	assertTrue(untypedSemB.tryAcquire(1, TimeUnit.SECONDS));
-    	
+
     	Mockito.verify(untypedHandlerB).notifyUntyped(Mockito.eq(topic),
     			Mockito.argThat(isUntypedTestEventWithMessage("boo")));
-    	
+
     }
-    
+
     public static class TestEventHandler implements TypedEventHandler<TestEvent> {
 
         @Override
@@ -410,67 +409,67 @@ public class TypedEventBusImplTest {
     }
 
     public static interface TestEventHandlerIface extends TypedEventHandler<TestEvent> {
-        
+
     }
-    
+
     /**
      * Tests that reified typedEventHandlers are properly processed
-     * 
+     *
      * @throws InterruptedException
      */
     @Test
     public void testGenericTypeInference() throws InterruptedException {
-        
+
         TypedEventHandler<TestEvent> handler = Mockito.spy(TestEventHandler.class);
         TypedEventHandler<TestEvent> handler2 = Mockito.spy(TestEventHandler.class);
         TypedEventHandler<TestEvent> handler3 = Mockito.mock(TestEventHandlerIface.class);
-        
+
         TestEvent event = new TestEvent();
         event.message = "boo";
-        
+
         Map<String, Object> serviceProperties = new HashMap<>();
         serviceProperties.put(SERVICE_ID, 42L);
-        
+
         impl.addTypedEventHandler(registeringBundle, handler, serviceProperties);
-        
+
         serviceProperties = new HashMap<>();
-        
+
         serviceProperties.put(TYPED_EVENT_TYPE, SpecialTestEvent.class.getName());
         serviceProperties.put(SERVICE_ID, 43L);
-        
+
         impl.addTypedEventHandler(registeringBundle, handler2, serviceProperties);
 
         serviceProperties = new HashMap<>();
-        
+
         serviceProperties.put(SERVICE_ID, 44L);
-        
+
         impl.addTypedEventHandler(registeringBundle, handler3, serviceProperties);
-        
+
         impl.deliver(event);
-        
+
         Mockito.verify(handler, Mockito.timeout(1000)).notify(eq(TEST_EVENT_TOPIC), argThat(isTestEventWithMessage("boo")));
         Mockito.verify(handler3, Mockito.timeout(1000)).notify(eq(TEST_EVENT_TOPIC), argThat(isTestEventWithMessage("boo")));
-        
+
         Mockito.verify(handler2, Mockito.after(1000).never()).notify(Mockito.anyString(), Mockito.any());
 
-        
+
         event = new SpecialTestEvent();
         event.message = "far";
         impl.deliver(event);
-        
+
         Mockito.verify(handler, Mockito.after(1000).never()).notify(eq(SPECIAL_TEST_EVENT_TOPIC), Mockito.any());
         Mockito.verify(handler3, Mockito.after(1000).never()).notify(eq(SPECIAL_TEST_EVENT_TOPIC), Mockito.any());
-        
-        Mockito.verify(handler2, Mockito.timeout(1000)).notify(eq(SPECIAL_TEST_EVENT_TOPIC), 
+
+        Mockito.verify(handler2, Mockito.timeout(1000)).notify(eq(SPECIAL_TEST_EVENT_TOPIC),
                 argThat(isSpecialTestEventWithMessage("far")));
-        
-        
-        
+
+
+
     }
 
     /**
      * Tests that events are delivered to Event Handlers based on type
-     * 
+     *
      * @throws InterruptedException
      */
     @Test
@@ -529,7 +528,7 @@ public class TypedEventBusImplTest {
 
     /**
      * Tests that filtering is applied to message sending/receiving
-     * 
+     *
      * @throws InterruptedException
      */
     @Test
@@ -610,7 +609,7 @@ public class TypedEventBusImplTest {
 
     /**
      * Tests that filtering is applied to message sending/receiving
-     * 
+     *
      * @throws InterruptedException
      */
     @Test
@@ -635,7 +634,7 @@ public class TypedEventBusImplTest {
 
     /**
      * Tests that the consumer of last resort gets called appropriately
-     * 
+     *
      * @throws InterruptedException
      */
     @Test
@@ -681,10 +680,10 @@ public class TypedEventBusImplTest {
         assertFalse(semA.tryAcquire(1, TimeUnit.SECONDS));
 
     }
-    
+
     /**
      * Tests that events are delivered correctly using a publisher
-     * 
+     *
      * @throws InterruptedException
      */
     @Test
@@ -743,9 +742,9 @@ public class TypedEventBusImplTest {
                 Mockito.argThat(isUntypedTestEventWithMessage("boo")));
 
         assertFalse(untypedSemB.tryAcquire(1, TimeUnit.SECONDS));
-        
-        
-        Map<String, Object> eventMap = Map.of("message", "far");
+
+
+        Map<String, Object> eventMap = Collections.singletonMap("message", "far");
         publisher.deliverUntyped(eventMap);
 
         assertTrue(semA.tryAcquire(1, TimeUnit.SECONDS));
@@ -760,19 +759,19 @@ public class TypedEventBusImplTest {
         Mockito.verify(untypedHandlerA).notifyUntyped(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
                 Mockito.argThat(isUntypedTestEventWithMessage("far")));
 
-        assertFalse(untypedSemB.tryAcquire(1, TimeUnit.SECONDS));        
-        
+        assertFalse(untypedSemB.tryAcquire(1, TimeUnit.SECONDS));
+
         assertTrue(publisher.isOpen());
         publisher.close();
         assertFalse(publisher.isOpen());
-        
+
         assertThrows(IllegalStateException.class, () -> publisher.deliver(event));
         assertThrows(IllegalStateException.class, () -> publisher.deliverUntyped(eventMap));
     }
 
     /**
      * Tests that filtering is applied when delivering historical events
-     * 
+     *
      * @throws InterruptedException
      */
     @Test
@@ -780,14 +779,14 @@ public class TypedEventBusImplTest {
 
     	TestEvent event = new TestEvent();
     	event.message = "foo";
-    	
+
     	impl.deliver(event);
-    	
+
     	event = new TestEvent();
         event.message = "bar";
 
         impl.deliver(event);
-        
+
         event = new TestEvent();
         event.message = "foobar";
 
@@ -795,9 +794,9 @@ public class TypedEventBusImplTest {
 
         event = new TestEvent();
         event.message = "barfoo";
-        
+
         impl.deliver(event);
-    	
+
     	Map<String, Object> serviceProperties = new HashMap<>();
 
         serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
@@ -807,10 +806,10 @@ public class TypedEventBusImplTest {
         serviceProperties.put(SERVICE_ID, 42L);
 
         impl.addTypedEventHandler(registeringBundle, handlerA, serviceProperties);
-        
+
         assertTrue(semA.tryAcquire(2, 1, TimeUnit.SECONDS));
         assertFalse(semA.tryAcquire(1, TimeUnit.SECONDS));
-        
+
         InOrder order = Mockito.inOrder(handlerA);
         order.verify(handlerA).notify(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
                 Mockito.argThat(isTestEventWithMessage("foo")));
@@ -829,7 +828,7 @@ public class TypedEventBusImplTest {
 
         assertTrue(semB.tryAcquire(3, 1, TimeUnit.SECONDS));
         assertFalse(semB.tryAcquire(1, TimeUnit.SECONDS));
-        
+
         order = Mockito.inOrder(handlerB);
         order.verify(handlerB).notify(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
         		Mockito.argThat(isTestEventWithMessage("bar")));
@@ -837,7 +836,7 @@ public class TypedEventBusImplTest {
         		Mockito.argThat(isTestEventWithMessage("foobar")));
         order.verify(handlerB).notify(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
         		Mockito.argThat(isTestEventWithMessage("barfoo")));
-        
+
         serviceProperties = new HashMap<>();
 
         serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
@@ -849,7 +848,7 @@ public class TypedEventBusImplTest {
 
         assertTrue(untypedSemA.tryAcquire(2, 1, TimeUnit.SECONDS));
         assertFalse(untypedSemA.tryAcquire(1, TimeUnit.SECONDS));
-        
+
         Mockito.verify(untypedHandlerA).notifyUntyped(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
         		Mockito.argThat(isUntypedTestEventWithMessage("foo")));
         Mockito.verify(untypedHandlerA).notifyUntyped(Mockito.eq(TestEvent.class.getName().replace('.', '/')),
@@ -880,10 +879,10 @@ public class TypedEventBusImplTest {
             }
         };
     }
-    
+
     ArgumentMatcher<SpecialTestEvent> isSpecialTestEventWithMessage(String message) {
         return new ArgumentMatcher<SpecialTestEvent>() {
-            
+
             @Override
             public boolean matches(SpecialTestEvent argument) {
                 return argument instanceof SpecialTestEvent && message.equals(((SpecialTestEvent) argument).message);

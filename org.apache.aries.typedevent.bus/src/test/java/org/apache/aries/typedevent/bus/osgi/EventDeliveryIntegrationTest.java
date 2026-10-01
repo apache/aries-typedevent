@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_TOPICS;
 
+import java.util.Collections;
 import java.util.Dictionary;
 import java.util.HashMap;
 import java.util.Hashtable;
@@ -51,7 +52,7 @@ import org.osgi.test.junit5.service.ServiceExtension;
 
 /**
  * This is a JUnit test that will be run inside an OSGi framework.
- * 
+ *
  * It can interact with the framework by starting or stopping bundles,
  * getting or registering services, or in other ways, and then observing
  * the result on the bundle(s) being tested.
@@ -60,13 +61,13 @@ import org.osgi.test.junit5.service.ServiceExtension;
 @ExtendWith(ServiceExtension.class)
 @ExtendWith(MockitoExtension.class)
 public class EventDeliveryIntegrationTest extends AbstractIntegrationTest {
-    
+
     @InjectBundleContext
     BundleContext context;
-    
+
     @InjectService
     TypedEventBus eventBus;
-    
+
     @Mock
     TestEventConsumer typedEventHandler;
 
@@ -75,7 +76,7 @@ public class EventDeliveryIntegrationTest extends AbstractIntegrationTest {
 
     @Mock
     UntypedEventHandler untypedEventHandler, untypedEventHandler2;
-    
+
     @Mock
     CustomEventConverter customConverter;
 
@@ -83,27 +84,27 @@ public class EventDeliveryIntegrationTest extends AbstractIntegrationTest {
     public void stop() throws Exception {
     	((AriesTypedEvents) eventBus).registerGlobalEventConverter(null, true);
     }
-    
+
     /**
      * Tests that events are delivered to untyped Event Handlers
      * based on topic
-     * 
+     *
      * @throws InterruptedException
      */
     @Test
     public void testEventReceiving() throws InterruptedException {
-        
+
         TestEvent event = new TestEvent();
         event.message = "boo";
-        
+
         Dictionary<String, Object> props = new Hashtable<>();
-        
+
         regs.add(context.registerService(TypedEventHandler.class, typedEventHandler, props));
 
         regs.add(context.registerService(TypedEventHandler.class, typedEventHandler2, props));
-        
+
         eventBus.deliver(event);
-        
+
         Mockito.verify(typedEventHandler, Mockito.timeout(1000)).notify(
                 Mockito.eq(TEST_EVENT_TOPIC), Mockito.argThat(isTestEventWithMessage("boo")));
 
@@ -114,51 +115,51 @@ public class EventDeliveryIntegrationTest extends AbstractIntegrationTest {
     /**
      * Tests that events are delivered to untyped Event Handlers
      * based on topic
-     * 
+     *
      * @throws InterruptedException
      */
     @Test
     public void testEventReceivingUntyped() throws InterruptedException {
-        
+
         TestEvent event = new TestEvent();
         event.message = "boo";
-        
+
         Dictionary<String, Object> props = new Hashtable<>();
         props.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
-        
+
         regs.add(context.registerService(UntypedEventHandler.class, untypedEventHandler, props));
-        
+
         props = new Hashtable<>();
-        
+
         props.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_2_TOPIC);
-        
+
         regs.add(context.registerService(UntypedEventHandler.class, untypedEventHandler2, props));
-        
-        
+
+
         eventBus.deliver(event);
-        
+
         Mockito.verify(untypedEventHandler, Mockito.timeout(1000)).notifyUntyped(
                 Mockito.eq(TEST_EVENT_TOPIC), Mockito.argThat(isUntypedTestEventWithMessage("boo")));
 
         Mockito.verify(untypedEventHandler2, Mockito.after(1000).never()).notifyUntyped(
                 Mockito.eq(TEST_EVENT_TOPIC), Mockito.argThat(isUntypedTestEventWithMessage("boo")));
-        
+
     }
-    
+
     @Test
     public void testSendComplexEvent() throws Exception {
         Dictionary<String, Object> props = new Hashtable<>();
-        
+
         regs.add(context.registerService(TypedEventHandler.class, typedEventHandler2, props));
-        
+
         TestEvent event = new TestEvent();
         event.message = "foo";
-        
+
         TestEvent2 event2 = TestEvent2.create(event);
-        
+
         eventBus.deliver(event2);
-        
-        
+
+
         Mockito.verify(typedEventHandler2, Mockito.timeout(1000))
             .notify(Mockito.eq(TEST_EVENT_2_TOPIC), Mockito.argThat(isTestEvent2WithMessage("foo")));
     }
@@ -167,247 +168,247 @@ public class EventDeliveryIntegrationTest extends AbstractIntegrationTest {
     public void testSendComplexEventToUntypedReceiver() throws Exception {
         Dictionary<String, Object> props = new Hashtable<>();
         props.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_2_TOPIC);
-        
-        regs.add(context.registerService(UntypedEventHandler.class, 
+
+        regs.add(context.registerService(UntypedEventHandler.class,
                 untypedEventHandler, props));
-        
+
         TestEvent event = new TestEvent();
         event.message = "foo";
-        
+
         TestEvent2 event2 = TestEvent2.create(event);
-        
+
         eventBus.deliver(event2);
-        
+
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-        
+
         Mockito.verify(untypedEventHandler, Mockito.timeout(1000))
             .notifyUntyped(eq(TEST_EVENT_2_TOPIC), captor.capture());
-        
+
         Map<String, Object> map = captor.getValue();
-        
+
         // Should be a String not an enum as we can't see the types
         assertEquals("RED", map.get("eventType"));
         @SuppressWarnings("unchecked")
         Map<String, Object> subMap = (Map<String, Object>) map.get("subEvent");
-        
+
         assertEquals("foo", subMap.get("message"));
     }
-    
+
     @Test
     public void testSendComplexUntypedEventToTypedReceiver() throws Exception {
         Dictionary<String, Object> props = new Hashtable<>();
-        
-        regs.add(context.registerService(TypedEventHandler.class, 
+
+        regs.add(context.registerService(TypedEventHandler.class,
                 typedEventHandler2, props));
-        
+
         Map<String, Object> event = new HashMap<>();
         event.put("message", "foo");
-        
+
         Map<String, Object> event2 = new HashMap<>();
         event2.put("subEvent", event);
         event2.put("eventType", "BLUE");
-        
+
         eventBus.deliver(TEST_EVENT_2_TOPIC, event2);
-        
+
         ArgumentCaptor<TestEvent2> captor = ArgumentCaptor.forClass(TestEvent2.class);
-        
+
         Mockito.verify(typedEventHandler2, Mockito.timeout(1000))
             .notify(eq(TEST_EVENT_2_TOPIC), captor.capture());
-        
+
         TestEvent2 received = captor.getValue();
-        
+
         // Should be a String not an enum as we can't see the types
         assertEquals(EventType.BLUE, received.eventType);
-        
+
         assertEquals("foo", received.subEvent.message);
     }
-    
+
     /**
      * Tests that events are delivered to untyped Event Handlers
      * based on topic
-     * 
+     *
      * @throws InterruptedException
      */
     @Test
     public void testEventReceivingUpdateTopic() throws InterruptedException {
-        
+
         TestEvent event = new TestEvent();
         event.message = "boo";
-        
+
         Dictionary<String, Object> props = new Hashtable<>();
         props.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
-        
+
         regs.add(context.registerService(TypedEventHandler.class, typedEventHandler, props));
 
         regs.add(context.registerService(UntypedEventHandler.class, untypedEventHandler, props));
-        
+
         eventBus.deliver(event);
-        
+
         Mockito.verify(typedEventHandler, Mockito.timeout(1000)).notify(
                 Mockito.eq(TEST_EVENT_TOPIC), Mockito.argThat(isTestEventWithMessage("boo")));
 
         Mockito.verify(untypedEventHandler, Mockito.timeout(1000)).notifyUntyped(
                 Mockito.eq(TEST_EVENT_TOPIC), Mockito.argThat(isUntypedTestEventWithMessage("boo")));
-        
+
         Mockito.clearInvocations(typedEventHandler, untypedEventHandler);
-        
+
         props.put(TYPED_EVENT_TOPICS, TEST_EVENT_2_TOPIC);
-        
+
         regs.forEach(s -> s.setProperties(props));
-        
+
         eventBus.deliver(event);
-        
+
         Mockito.verify(typedEventHandler, Mockito.after(1000).never()).notify(
                 Mockito.eq(TEST_EVENT_TOPIC), Mockito.any());
         Mockito.verify(untypedEventHandler, Mockito.after(1000).never()).notifyUntyped(
         		Mockito.eq(TEST_EVENT_TOPIC), Mockito.any());
-        
+
         eventBus.deliver(TEST_EVENT_2_TOPIC, event);
-        
+
         Mockito.verify(typedEventHandler, Mockito.timeout(1000)).notify(
                 Mockito.eq(TEST_EVENT_2_TOPIC), Mockito.argThat(isTestEventWithMessage("boo")));
 
         Mockito.verify(untypedEventHandler, Mockito.timeout(1000)).notifyUntyped(
                 Mockito.eq(TEST_EVENT_2_TOPIC), Mockito.argThat(isUntypedTestEventWithMessage("boo")));
-        
+
     }
 
     /**
      * Tests that events are delivered to untyped Event Handlers
      * based on topic
-     * 
+     *
      * @throws InterruptedException
      */
     @Test
     public void testEventReceivingUpdateWildcardTopic() throws InterruptedException {
-    	
+
     	TestEvent event = new TestEvent();
     	event.message = "boo";
-    	
+
     	Dictionary<String, Object> props = new Hashtable<>();
     	props.put(TYPED_EVENT_TOPICS, "foo/bar/*");
-    	
+
     	regs.add(context.registerService(TypedEventHandler.class, typedEventHandler, props));
-    	
+
     	regs.add(context.registerService(UntypedEventHandler.class, untypedEventHandler, props));
-    	
+
     	eventBus.deliver("foo/bar/foobar", event);
-    	
+
     	Mockito.verify(typedEventHandler, Mockito.timeout(1000)).notify(
     			Mockito.eq("foo/bar/foobar"), Mockito.argThat(isTestEventWithMessage("boo")));
-    	
+
     	Mockito.verify(untypedEventHandler, Mockito.timeout(1000)).notifyUntyped(
     			Mockito.eq("foo/bar/foobar"), Mockito.argThat(isUntypedTestEventWithMessage("boo")));
-    	
+
     	Mockito.clearInvocations(typedEventHandler, untypedEventHandler);
-    	
+
     	props.put(TYPED_EVENT_TOPICS, "foo/bar/foobar/*");
-    	
+
     	regs.forEach(s -> s.setProperties(props));
-    	
+
     	eventBus.deliver("foo/bar/foobar", event);
-    	
+
     	Mockito.verify(typedEventHandler, Mockito.after(1000).never()).notify(
     			Mockito.eq("foo/bar/foobar"), Mockito.any());
     	Mockito.verify(untypedEventHandler, Mockito.after(1000).never()).notifyUntyped(
     			Mockito.eq("foo/bar/foobar"), Mockito.any());
-    	
+
     	eventBus.deliver("foo/bar/foobar/fizzbuzz", event);
-    	
+
     	Mockito.verify(typedEventHandler, Mockito.timeout(1000)).notify(
     			Mockito.eq("foo/bar/foobar/fizzbuzz"), Mockito.argThat(isTestEventWithMessage("boo")));
-    	
+
     	Mockito.verify(untypedEventHandler, Mockito.timeout(1000)).notifyUntyped(
     			Mockito.eq("foo/bar/foobar/fizzbuzz"), Mockito.argThat(isUntypedTestEventWithMessage("boo")));
-    	
+
     }
 
     /**
      * Tests that events are delivered to untyped Event Handlers
      * based on topic
-     * 
+     *
      * @throws InterruptedException
      */
     @Test
     public void testEventReceivingUpdateSingleLevelWildcardTopic() throws InterruptedException {
-    	
+
     	TestEvent event = new TestEvent();
     	event.message = "boo";
-    	
+
     	Dictionary<String, Object> props = new Hashtable<>();
     	props.put(TYPED_EVENT_TOPICS, "foo/+/foobar");
-    	
+
     	regs.add(context.registerService(TypedEventHandler.class, typedEventHandler, props));
-    	
+
     	regs.add(context.registerService(UntypedEventHandler.class, untypedEventHandler, props));
-    	
+
     	eventBus.deliver("foo/bar/foobar", event);
-    	
+
     	Mockito.verify(typedEventHandler, Mockito.timeout(1000)).notify(
     			Mockito.eq("foo/bar/foobar"), Mockito.argThat(isTestEventWithMessage("boo")));
-    	
+
     	Mockito.verify(untypedEventHandler, Mockito.timeout(1000)).notifyUntyped(
     			Mockito.eq("foo/bar/foobar"), Mockito.argThat(isUntypedTestEventWithMessage("boo")));
-    	
+
     	Mockito.clearInvocations(typedEventHandler, untypedEventHandler);
-    	
+
     	props.put(TYPED_EVENT_TOPICS, "foo/bar/foobar/+");
-    	
+
     	regs.forEach(s -> s.setProperties(props));
-    	
+
     	eventBus.deliver("foo/bar/foobar", event);
-    	
+
     	Mockito.verify(typedEventHandler, Mockito.after(1000).never()).notify(
     			Mockito.eq("foo/bar/foobar"), Mockito.any());
     	Mockito.verify(untypedEventHandler, Mockito.after(1000).never()).notifyUntyped(
     			Mockito.eq("foo/bar/foobar"), Mockito.any());
-    	
+
     	eventBus.deliver("foo/bar/foobar/fizzbuzz", event);
-    	
+
     	Mockito.verify(typedEventHandler, Mockito.timeout(1000)).notify(
     			Mockito.eq("foo/bar/foobar/fizzbuzz"), Mockito.argThat(isTestEventWithMessage("boo")));
-    	
+
     	Mockito.verify(untypedEventHandler, Mockito.timeout(1000)).notifyUntyped(
     			Mockito.eq("foo/bar/foobar/fizzbuzz"), Mockito.argThat(isUntypedTestEventWithMessage("boo")));
-    	
+
     }
-    
+
     /**
      * Tests that events are delivered to untyped Event Handlers
      * based on topic
-     * 
+     *
      * @throws InterruptedException
      */
     @Test
     public void testCustomEventReceiving() throws InterruptedException {
-        
+
         TestEvent event = new TestEvent();
         event.message = "boo";
-        
+
         ((AriesTypedEvents) eventBus).registerGlobalEventConverter(customConverter);
-        
-        Mockito.when(customConverter.toUntypedEvent(event)).thenReturn(Map.of("message", "BOO"));
-        		
+
+        Mockito.when(customConverter.toUntypedEvent(event)).thenReturn(Collections.singletonMap("message", "BOO"));
+
         Dictionary<String, Object> props = new Hashtable<>();
         props.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
-        
+
         regs.add(context.registerService(UntypedEventHandler.class, untypedEventHandler, props));
-        
+
         props = new Hashtable<>();
-        
+
         props.put(TypedEventConstants.TYPED_EVENT_TOPICS, TEST_EVENT_2_TOPIC);
-        
+
         regs.add(context.registerService(UntypedEventHandler.class, untypedEventHandler2, props));
-        
+
         eventBus.deliver(event);
-        
+
         Mockito.verify(untypedEventHandler, Mockito.timeout(1000)).notifyUntyped(
                 Mockito.eq(TEST_EVENT_TOPIC), Mockito.argThat(isUntypedTestEventWithMessage("BOO")));
 
         Mockito.verify(untypedEventHandler2, Mockito.after(1000).never()).notifyUntyped(
                 Mockito.eq(TEST_EVENT_TOPIC), Mockito.argThat(isUntypedTestEventWithMessage("BOO")));
-        		
+
     }
-    
+
 }

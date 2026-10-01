@@ -57,7 +57,7 @@ public class EventConverterTest {
             return holder;
         }
     }
-    
+
     public static class ParameterizedEvent<T> {
     	public T parameterisedMessage;
     }
@@ -65,7 +65,7 @@ public class EventConverterTest {
     public static interface IntegerTestHandler extends TypedEventHandler<ParameterizedEvent<Integer>> {}
 
     public static interface DoubleTestHandler extends TypedEventHandler<ParameterizedEvent<Double>> {}
-    
+
     public static class DoublyNestedEventHolderWithIssues {
         public NestedEventHolderNotAProperDTO event;
     }
@@ -224,7 +224,7 @@ public class EventConverterTest {
         assertEquals(42d, converted.parameterisedMessage, 0.00001);
 
         ParameterizedEvent<Integer> testEvent = EventConverter
-                .forUntypedEvent(Map.of("parameterisedMessage", "17"), null)
+                .forUntypedEvent(Collections.singletonMap("parameterisedMessage", "17"), null)
                 .toTypedEvent(new TypeData(integerType, Collections.emptyMap()));
 
         assertEquals(17, testEvent.parameterisedMessage);
@@ -239,7 +239,7 @@ public class EventConverterTest {
         TypeData stringTypeData = new TypeData(String.class, Collections.emptyMap());
         TypeData testEventTypeData = new TypeData(TestEvent.class, Collections.emptyMap());
 
-        Mockito.when(cec.toUntypedEvent(te)).thenReturn(Map.of("message", "BAR"));
+        Mockito.when(cec.toUntypedEvent(te)).thenReturn(Collections.singletonMap("message", "BAR"));
         Mockito.when(cec.toTypedEvent(te, stringTypeData)).thenReturn("FOOBAR");
         Mockito.when(cec.toTypedEvent(te, testEventTypeData)).thenReturn("FIZZBUZZ");
         EventConverter eventConverter = EventConverter.forTypedEvent(te, cec);
@@ -281,7 +281,7 @@ public class EventConverterTest {
         TypeData intTypedData = new TypeData(integerType, Collections.emptyMap());
         TypeData doubleTypedData = new TypeData(doubleType, Collections.emptyMap());
 
-        Mockito.when(cec.toUntypedEvent(te)).thenReturn(Map.of("parameterisedMessage", "21"));
+        Mockito.when(cec.toUntypedEvent(te)).thenReturn(Collections.singletonMap("parameterisedMessage", "21"));
         Mockito.when(cec.toTypedEvent(te, intTypedData)).thenReturn(21d);
         Mockito.when(cec.toTypedEvent(te, doubleTypedData)).thenReturn(63d);
 

@@ -48,7 +48,7 @@ public class EventSelectorTest {
 
     @Mock
     Filter mockFilter;
-    
+
     @Mock
     EventConverter eventConverter;
 
@@ -61,56 +61,55 @@ public class EventSelectorTest {
     public void testTopicMatching(String topic, String topicFilter, boolean expectedResult) {
         assertEquals(expectedResult, new EventSelector(topicFilter, null).matches(topic, new HashMap<>()));
     }
-    
+
     /**
      * Test topics and filters for matching checks
      * @return
      */
     static Stream<Arguments> getTopicMatchingData() {
-    	return List.of(
-    				// Basic
-    				Arguments.of("foo", "foo", true),
-    				Arguments.of("foo/bar", "foo", false),
-    				Arguments.of("foo/bar", "foo/bar", true),
-    				Arguments.of("foo/bark", "foo/bar", false),
-    				Arguments.of("foo/bar", "foo/barb", false),
-    				// Multi Level Wildcard
-    				Arguments.of("foo", "*", true),
-    				Arguments.of("foo", "foo/*", false),
-    				Arguments.of("foo/bar", "*", true),
-    				Arguments.of("foo/bar", "foo/*", true),
-    				Arguments.of("foo/foobar", "foo/*", true),
-    				Arguments.of("foo/bar/foobar", "foo/*", true),
-    				Arguments.of("foo/bar/foobar", "foo/bar/*", true),
-    				Arguments.of("foo/bark/foobar", "foo/bar/*", false),
-    				// Single Level Wildcard
-    				Arguments.of("foo", "+", true),
-    				Arguments.of("foo", "foo/+", false),
-    				Arguments.of("foo/bar", "+", false),
-    				Arguments.of("foo/bar", "foo/+", true),
-    				Arguments.of("foo/bar", "+/bar", true),
-    				Arguments.of("foo/foobar", "foo/+", true),
-    				Arguments.of("fool/foobar", "foo/+", false),
-    				Arguments.of("foo/foobar", "+/+", true),
-    				Arguments.of("foo/bar/foobar", "foo/+", false),
-    				Arguments.of("foo/bar/foobar", "foo/+/foobar", true),
-    				Arguments.of("foo/bar/foobark", "foo/+/foobar", false),
-    				Arguments.of("foo/bar/foobar", "foo/+/+", true),
-    				Arguments.of("foo/bar/foobar", "+/bar/+", true),
-    				Arguments.of("foo/bark/foobar", "foo/bar/+", false),
-    				// Mixture of wildcards
-    				Arguments.of("foo", "+/*", false),
-    				Arguments.of("foo/bar", "+/*", true),
-    				Arguments.of("foo/bar/foobar", "+/*", true),
-    				Arguments.of("foo/bar/foobar", "+/bar/*", true),
-    				Arguments.of("foo/bar/foobar", "+/bar/foobar/*", false),
-    				Arguments.of("foo/bar/foobar", "+/bar/+/*", false),
-    				Arguments.of("foo/bar/foobar", "+/+/*", true),
-    				Arguments.of("foo/bar/foobar/fizz", "+/bar/+/*", true),
-    				Arguments.of("foo/bar/foobar/fizz", "foo/+/foobar/*", true),
-    				Arguments.of("foo/bar/foobar/fizz", "foo/+/+/*", true),
-    				Arguments.of("fool/bar/foobar/fizz", "foo/+/+/*", false)
-    			).stream();
+        return Stream.of(// Basic
+                         Arguments.of("foo", "foo", true),
+                         Arguments.of("foo/bar", "foo", false),
+                         Arguments.of("foo/bar", "foo/bar", true),
+                         Arguments.of("foo/bark", "foo/bar", false),
+                         Arguments.of("foo/bar", "foo/barb", false),
+                         // Multi Level Wildcard
+                         Arguments.of("foo", "*", true),
+                         Arguments.of("foo", "foo/*", false),
+                         Arguments.of("foo/bar", "*", true),
+                         Arguments.of("foo/bar", "foo/*", true),
+                         Arguments.of("foo/foobar", "foo/*", true),
+                         Arguments.of("foo/bar/foobar", "foo/*", true),
+                         Arguments.of("foo/bar/foobar", "foo/bar/*", true),
+                         Arguments.of("foo/bark/foobar", "foo/bar/*", false),
+                         // Single Level Wildcard
+                         Arguments.of("foo", "+", true),
+                         Arguments.of("foo", "foo/+", false),
+                         Arguments.of("foo/bar", "+", false),
+                         Arguments.of("foo/bar", "foo/+", true),
+                         Arguments.of("foo/bar", "+/bar", true),
+                         Arguments.of("foo/foobar", "foo/+", true),
+                         Arguments.of("fool/foobar", "foo/+", false),
+                         Arguments.of("foo/foobar", "+/+", true),
+                         Arguments.of("foo/bar/foobar", "foo/+", false),
+                         Arguments.of("foo/bar/foobar", "foo/+/foobar", true),
+                         Arguments.of("foo/bar/foobark", "foo/+/foobar", false),
+                         Arguments.of("foo/bar/foobar", "foo/+/+", true),
+                         Arguments.of("foo/bar/foobar", "+/bar/+", true),
+                         Arguments.of("foo/bark/foobar", "foo/bar/+", false),
+                         // Mixture of wildcards
+                         Arguments.of("foo", "+/*", false),
+                         Arguments.of("foo/bar", "+/*", true),
+                         Arguments.of("foo/bar/foobar", "+/*", true),
+                         Arguments.of("foo/bar/foobar", "+/bar/*", true),
+                         Arguments.of("foo/bar/foobar", "+/bar/foobar/*", false),
+                         Arguments.of("foo/bar/foobar", "+/bar/+/*", false),
+                         Arguments.of("foo/bar/foobar", "+/+/*", true),
+                         Arguments.of("foo/bar/foobar/fizz", "+/bar/+/*", true),
+                         Arguments.of("foo/bar/foobar/fizz", "foo/+/foobar/*", true),
+                         Arguments.of("foo/bar/foobar/fizz", "foo/+/+/*", true),
+                         Arguments.of("fool/bar/foobar/fizz", "foo/+/+/*", false)
+                         );
     }
 
    @Test

@@ -77,7 +77,7 @@ public class EventSelector implements Comparable<EventSelector> {
 		
 		if(topic == null) {
 			// No topic matching
-			additionalSegments = List.of();
+			additionalSegments = new ArrayList<>();
 			isMultiLevelWildcard = false;
 			initial = "";
 			topicMatcher = s -> true;
@@ -93,7 +93,7 @@ public class EventSelector implements Comparable<EventSelector> {
 			int singleLevelIdx = topic.indexOf('+');
 			if(singleLevelIdx < 0) {
 				initial = topic;
-				additionalSegments = List.of();
+				additionalSegments = new ArrayList<>();
 			} else {
 				initial = topic.substring(0, singleLevelIdx);
 				List<String> segments = new ArrayList<>();
@@ -107,7 +107,7 @@ public class EventSelector implements Comparable<EventSelector> {
 						singleLevelIdx = nextIdx;
 					}
 				}
-				additionalSegments = List.copyOf(segments);
+				additionalSegments = new ArrayList<>(segments);
 			}
 			
 			if(additionalSegments.isEmpty()) {
