@@ -17,6 +17,7 @@
 package org.apache.aries.typedevent.bus.impl;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
@@ -77,7 +78,7 @@ public class EventSelector implements Comparable<EventSelector> {
 		
 		if(topic == null) {
 			// No topic matching
-			additionalSegments = List.of();
+			additionalSegments = Collections.emptyList();
 			isMultiLevelWildcard = false;
 			initial = "";
 			topicMatcher = s -> true;
@@ -93,7 +94,7 @@ public class EventSelector implements Comparable<EventSelector> {
 			int singleLevelIdx = topic.indexOf('+');
 			if(singleLevelIdx < 0) {
 				initial = topic;
-				additionalSegments = List.of();
+				additionalSegments = Collections.emptyList();
 			} else {
 				initial = topic.substring(0, singleLevelIdx);
 				List<String> segments = new ArrayList<>();
@@ -107,7 +108,7 @@ public class EventSelector implements Comparable<EventSelector> {
 						singleLevelIdx = nextIdx;
 					}
 				}
-				additionalSegments = List.copyOf(segments);
+				additionalSegments = Collections.unmodifiableList(segments);
 			}
 			
 			if(additionalSegments.isEmpty()) {

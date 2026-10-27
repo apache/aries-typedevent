@@ -166,6 +166,8 @@
                     <configuration>
                         <source>1.8</source>
                         <target>1.8</target>
+                        <!-- release (not just source/target) so Java 9+ APIs fail the build -->
+                        <release>8</release>
                     </configuration>
                 </plugin>
                 <plugin>
