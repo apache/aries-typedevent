@@ -17,6 +17,8 @@
 
 package org.apache.aries.typedevent.bus.impl;
 
+import java.util.Map;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,6 +42,12 @@ class MonitorEventTask extends EventTask {
     	if(_log.isTraceEnabled()) {
     		_log.trace("Distributing event to the event monitor");
     	}
-    	monitorImpl.event(eventType, eventData.toUntypedEvent());
+    	Map<String, Object> untyped = eventData.tryUntypedEvent();
+    	if (untyped == null) {
+    		// Already logged when the conversion failed
+    		_log.debug("The event for topic {} has no untyped form and is not passed to the event monitor", eventType);
+    		return;
+    	}
+    	monitorImpl.event(eventType, untyped);
     }
 }

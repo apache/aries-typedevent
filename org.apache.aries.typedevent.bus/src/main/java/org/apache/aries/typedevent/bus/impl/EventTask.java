@@ -27,9 +27,10 @@ abstract class EventTask {
     public void notifyListener() {
     	try {
             unsafeNotify();
-        } catch (Exception e) {
+        } catch (Exception | StackOverflowError e) {
         	// TODO blacklisting?
-            _log.error("The event delivery failed for task type.", getClass(), e);
+        	// An overflow must not end the delivery thread, or no later event would be delivered
+            _log.error("The event delivery failed for task type {}.", getClass(), e);
         }
     }
     

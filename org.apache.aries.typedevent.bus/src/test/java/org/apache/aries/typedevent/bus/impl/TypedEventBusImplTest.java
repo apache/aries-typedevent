@@ -868,4 +868,106 @@ public class TypedEventBusImplTest {
         };
     }
 
+    public static class CyclicTestEvent {
+        public String message;
+        public CyclicTestEvent other;
+    }
+
+    public static class CyclicTestEventCopy {
+        public String message;
+        public CyclicTestEventCopy other;
+    }
+
+    /**
+     * An event that is not a tree must not affect the delivery of later events
+     */
+    @Test
+    public void testCyclicEventDoesNotAffectLaterEvents() throws InterruptedException {
+
+        String cyclicTopic = CyclicTestEvent.class.getName().replace(".", "/");
+
+        CyclicTestEvent cyclic = new CyclicTestEvent();
+        cyclic.message = "boo";
+        cyclic.other = cyclic;
+
+        // A typed handler of the same type, which needs no conversion
+        Map<String, Object> serviceProperties = new HashMap<>();
+        serviceProperties.put(TYPED_EVENT_TOPICS, cyclicTopic);
+        serviceProperties.put(TYPED_EVENT_TYPE, CyclicTestEvent.class.getName());
+        serviceProperties.put(SERVICE_ID, 42L);
+        impl.addTypedEventHandler(registeringBundle, handlerA, serviceProperties);
+
+        // A typed handler of another type, which cannot be given a cyclic event
+        serviceProperties = new HashMap<>();
+        serviceProperties.put(TYPED_EVENT_TOPICS, cyclicTopic);
+        serviceProperties.put(TYPED_EVENT_TYPE, CyclicTestEventCopy.class.getName());
+        serviceProperties.put(SERVICE_ID, 43L);
+        impl.addTypedEventHandler(registeringBundle, handlerB, serviceProperties);
+
+        // An untyped handler with a filter, which is evaluated by the sending thread
+        serviceProperties = new HashMap<>();
+        serviceProperties.put(TYPED_EVENT_TOPICS, cyclicTopic);
+        serviceProperties.put(TYPED_EVENT_FILTER, "(message=boo)");
+        serviceProperties.put(SERVICE_ID, 44L);
+        impl.addUntypedEventHandler(untypedHandlerA, serviceProperties);
+
+        // A handler for the later event
+        serviceProperties = new HashMap<>();
+        serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+        serviceProperties.put(SERVICE_ID, 45L);
+        impl.addUntypedEventHandler(untypedHandlerB, serviceProperties);
+
+        impl.deliver(cyclic);
+
+        assertTrue(semA.tryAcquire(1, TimeUnit.SECONDS));
+        Mockito.verify(handlerA).notify(Mockito.eq(cyclicTopic), Mockito.same(cyclic));
+
+        assertTrue(untypedSemA.tryAcquire(1, TimeUnit.SECONDS));
+        Mockito.verify(untypedHandlerA).notifyUntyped(Mockito.eq(cyclicTopic),
+                Mockito.argThat(m -> m != null && m.get("other") == m));
+
+        assertFalse(semB.tryAcquire(500, TimeUnit.MILLISECONDS));
+
+        TestEvent event = new TestEvent();
+        event.message = "after";
+        impl.deliver(event);
+
+        assertTrue(untypedSemB.tryAcquire(1, TimeUnit.SECONDS));
+        Mockito.verify(untypedHandlerB).notifyUntyped(Mockito.eq(TEST_EVENT_TOPIC),
+                Mockito.argThat(isUntypedTestEventWithMessage("after")));
+    }
+
+    /**
+     * A handler that overflows the stack must not stop delivery of later events
+     */
+    @Test
+    public void testStackOverflowInHandlerDoesNotStopDelivery() throws InterruptedException {
+
+        Mockito.doThrow(new StackOverflowError()).doAnswer(i -> {
+            semA.release();
+            return null;
+        }).when(handlerA).notify(Mockito.anyString(), Mockito.any());
+
+        Map<String, Object> serviceProperties = new HashMap<>();
+        serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+        serviceProperties.put(TYPED_EVENT_TYPE, TestEvent.class.getName());
+        serviceProperties.put(SERVICE_ID, 42L);
+        impl.addTypedEventHandler(registeringBundle, handlerA, serviceProperties);
+
+        TestEvent event = new TestEvent();
+        event.message = "first";
+        impl.deliver(event);
+
+        // The first delivery fails
+        assertFalse(semA.tryAcquire(500, TimeUnit.MILLISECONDS));
+
+        event = new TestEvent();
+        event.message = "second";
+        impl.deliver(event);
+
+        assertTrue(semA.tryAcquire(1, TimeUnit.SECONDS));
+        Mockito.verify(handlerA).notify(Mockito.eq(TEST_EVENT_TOPIC),
+                Mockito.argThat(isTestEventWithMessage("second")));
+    }
+
 }

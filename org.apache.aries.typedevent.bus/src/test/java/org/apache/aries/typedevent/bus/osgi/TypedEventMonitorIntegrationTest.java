@@ -27,6 +27,7 @@ import java.util.Arrays;
 import java.util.Dictionary;
 import java.util.Hashtable;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.apache.aries.typedevent.bus.common.TestEvent;
@@ -588,5 +589,43 @@ public class TypedEventMonitorIntegrationTest extends AbstractIntegrationTest {
         assertEquals(2, events.size(), events.toString());
         assertEquals("bar", events.get(0).eventData.get("message"));
         assertEquals("foobar", events.get(1).eventData.get("message"));
+    }
+
+    public static class CyclicEvent {
+        public String message;
+        public CyclicEvent other;
+    }
+
+    /**
+     * Tests that an event which is not a tree is monitored, and does
+     * not prevent later events from being delivered
+     */
+    @Test
+    public void testCyclicEventMonitoring(@InjectService TypedEventMonitor monitor,
+            @InjectService TypedEventBus eventBus) throws Exception {
+
+        Promise<List<MonitorEvent>> eventsPromise = monitor.monitorEvents()
+                .limit(2)
+                .collect(Collectors.toList());
+
+        CyclicEvent cyclic = new CyclicEvent();
+        cyclic.message = "cyclic";
+        cyclic.other = cyclic;
+        eventBus.deliver(cyclic);
+
+        TestEvent event = new TestEvent();
+        event.message = "after";
+        eventBus.deliver(event);
+
+        List<MonitorEvent> events = eventsPromise.timeout(5000).getValue();
+
+        assertEquals(2, events.size());
+
+        assertEquals(CyclicEvent.class.getName().replace('.', '/'), events.get(0).topic);
+        assertEquals("cyclic", events.get(0).eventData.get("message"));
+        assertEquals("cyclic", ((Map<?, ?>) events.get(0).eventData.get("other")).get("message"));
+
+        assertEquals(TEST_EVENT_TOPIC, events.get(1).topic);
+        assertEquals("after", events.get(1).eventData.get("message"));
     }
 }

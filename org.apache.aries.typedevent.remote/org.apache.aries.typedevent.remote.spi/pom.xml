@@ -24,7 +24,19 @@
     <properties>
 		<no.test.jar>true</no.test.jar>
 	</properties>
-    
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.apache.aries.typedevent</groupId>
+                <artifactId>typedevent-test-bom</artifactId>
+                <version>${project.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <dependency>
             <groupId>org.osgi</groupId>
@@ -51,6 +63,11 @@
             <groupId>org.apache.aries.typedevent.remote</groupId>
             <artifactId>org.apache.aries.typedevent.remote.api</artifactId>
             <version>1.1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
     
