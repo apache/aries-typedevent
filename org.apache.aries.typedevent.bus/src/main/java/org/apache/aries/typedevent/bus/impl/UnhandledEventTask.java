@@ -17,6 +17,8 @@
 
 package org.apache.aries.typedevent.bus.impl;
 
+import java.util.Map;
+
 import org.osgi.service.typedevent.UnhandledEventHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +43,11 @@ class UnhandledEventTask extends EventTask {
     	if(_log.isDebugEnabled()) {
     		_log.debug("Distributing event data {} to the unhandled event handler {}", eventData, eventProcessor);
     	}
-        eventProcessor.notifyUnhandled(topic, eventData.toUntypedEvent());
+        Map<String, Object> untyped = eventData.tryUntypedEvent();
+        if (untyped == null) {
+            _log.debug("The event for topic {} has no untyped form and is not delivered to the unhandled event handler", topic);
+            return;
+        }
+        eventProcessor.notifyUnhandled(topic, untyped);
     }
 }

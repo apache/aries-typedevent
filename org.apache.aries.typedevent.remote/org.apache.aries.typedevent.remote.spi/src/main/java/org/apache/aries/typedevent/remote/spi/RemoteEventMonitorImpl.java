@@ -16,19 +16,20 @@
  */
 package org.apache.aries.typedevent.remote.spi;
 
+import static java.util.Collections.newSetFromMap;
 import static org.apache.aries.typedevent.remote.api.RemoteEventConstants.REMOTE_EVENT_MARKER;
 
 import java.time.Instant;
-import java.util.AbstractMap;
 import java.util.Arrays;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import org.apache.aries.typedevent.remote.api.FilterDTO;
 import org.apache.aries.typedevent.remote.api.RemoteEventMonitor;
@@ -112,55 +113,71 @@ public class RemoteEventMonitorImpl implements RemoteEventMonitor {
             // We use a TreeMap to ensure predictable ordering of keys
             // This is important for the regex matching contract.
 
-            SortedMap<String, Object> toFilter = new TreeMap<>();
-
-            // Using a collector blew up with null values, even though they are
-            // supported by the TreeMap
-            event.eventData.entrySet().stream()
-                    .flatMap(e -> flatten("", e))
-                    .forEach(e -> toFilter.put(e.getKey(), e.getValue()));
+            SortedMap<String, Object> toFilter = flatten(event.eventData);
 
             toFilter.put("-topic", event.topic);
             toFilter.put("-publishType", event.publishType);
 
-            StringBuilder eventText = new StringBuilder();
+            // Event data that is not a tree can have values that print or match
+            // endlessly. Such an event cannot match any filter that looks at them.
+            try {
+                StringBuilder eventText = new StringBuilder();
 
-            if (filterPairs.stream().anyMatch(p -> p.regex != null)) {
-                toFilter.forEach((k, v) -> {
-                    eventText.append(k).append(':').append(v).append(',');
-                });
+                if (filterPairs.stream().anyMatch(p -> p.regex != null)) {
+                    toFilter.forEach((k, v) -> {
+                        eventText.append(k).append(':').append(v).append(',');
+                    });
+                }
+
+                // If a FilterDTO contains both LDAP and regular expressions, then both must match.
+                return filterPairs.stream().anyMatch(p ->
+                        (p.ldap == null || p.ldap.matches(toFilter)) &&
+                        (p.regex == null || p.regex.matcher(eventText).find())
+                );
+            } catch (StackOverflowError so) {
+                return false;
             }
-
-            // If a FilterDTO contains both LDAP and regular expressions, then both must match.
-            return filterPairs.stream().anyMatch(p ->
-                    (p.ldap == null || p.ldap.matches(toFilter)) &&
-                    (p.regex == null || p.regex.matcher(eventText).find())
-            );
         };
     }
 
-    private Stream<Entry<String, Object>> flatten(String parentScope,
-            Entry<String, Object> entry) {
+    /**
+     * Flatten nested maps into a single map with keys of the form x.y.z. The
+     * entries are sorted to give a predictable ordering of keys, which is
+     * important for the regex matching contract.
+     * <p>
+     * A nested map that refers back to one of the maps containing it (which the
+     * event bus allows for events that are not trees) contributes no further entries.
+     */
+    static SortedMap<String, Object> flatten(Map<String, Object> eventData) {
+        SortedMap<String, Object> result = new TreeMap<>();
+        flatten("", eventData, newSetFromMap(new IdentityHashMap<>()), result);
+        return result;
+    }
 
-        if (entry.getValue() instanceof Map) {
+    private static void flatten(String scope, Map<String, Object> map,
+            Set<Object> enclosing, Map<String, Object> result) {
 
-            String keyPrefix = parentScope + entry.getKey() + ".";
-
-            @SuppressWarnings("unchecked")
-            Map<String, Object> subMap = (Map<String, Object>) entry.getValue();
-
-            // Recursively flatten maps that are inside our map
-            return subMap.entrySet().stream()
-                .flatMap(e -> flatten(keyPrefix, e));
-        } else if(parentScope.isEmpty()) {
-            // Fast path for top-level entries
-            return Stream.of(entry);
-        } else {
-            // Map the key of a nested entry into x.y.z
-            return Stream.of(new AbstractMap.SimpleEntry<>(
-                    parentScope + entry.getKey(), entry.getValue()));
+        if (!enclosing.add(map)) {
+            return;
         }
 
+        try {
+            for (Entry<String, Object> entry : map.entrySet()) {
+                Object value = entry.getValue();
+                if (value instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> subMap = (Map<String, Object>) value;
+
+                    // Recursively flatten maps that are inside our map
+                    flatten(scope + entry.getKey() + ".", subMap, enclosing, result);
+                } else {
+                    // Map the key of a nested entry into x.y.z
+                    result.put(scope + entry.getKey(), value);
+                }
+            }
+        } finally {
+            enclosing.remove(map);
+        }
     }
 
 }

@@ -21,6 +21,7 @@ import static java.lang.ThreadLocal.withInitial;
 import static java.util.Collections.newSetFromMap;
 
 import java.lang.reflect.Array;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Type;
 import java.time.Duration;
 import java.time.Instant;
@@ -33,23 +34,30 @@ import java.time.OffsetTime;
 import java.time.Year;
 import java.time.YearMonth;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
-import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.apache.aries.typedevent.bus.spi.CustomEventConverter;
 import org.apache.aries.typedevent.bus.spi.TypeData;
 import org.osgi.framework.Filter;
+import org.osgi.util.converter.ConversionException;
 import org.osgi.util.converter.Converter;
 import org.osgi.util.converter.ConverterFunction;
 import org.osgi.util.converter.Converters;
 import org.osgi.util.converter.TypeReference;
+import org.osgi.util.promise.Deferred;
+import org.osgi.util.promise.Promise;
+import org.osgi.util.promise.Promises;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,15 +71,11 @@ public class EventConverter {
 
 	private static final Logger _log = LoggerFactory.getLogger(EventConverter.class);
 	
-    private static final TypeReference<List<Object>> LIST_OF_OBJECTS = new TypeReference<List<Object>>() {
-    };
-    private static final TypeReference<Set<Object>> SET_OF_OBJECTS = new TypeReference<Set<Object>>() {
-    };
     static final TypeReference<Map<String, Object>> MAP_WITH_STRING_KEYS = new TypeReference<Map<String, Object>>() {
     };
-    private static final TypeReference<Map<Object, Object>> MAP_OF_OBJECT_TO_OBJECT = new TypeReference<Map<Object, Object>>() {
-    };
 
+    // Converts a DTO to a Map of its raw field values, without flattening the values
+    private static final Converter shallowConverter = Converters.standardConverter();
     private static final Converter eventConverter;
     private static final Set<Class<?>> safeClasses;
     private static final Set<Class<?>> specialClasses;
@@ -151,27 +155,24 @@ public class EventConverter {
         // ensures we pick up any embedded lists of DTOs or enums
         if (o instanceof Collection) {
         	if(_log.isTraceEnabled()) {
-        		_log.trace("The collection {} will be processed to map the contained objects.", o);
+        		_log.trace("The collection of type {} will be processed to map the contained objects.", sourceClass);
         	}
-            if (o instanceof Set) {
-                return eventConverter.convert(o).to(SET_OF_OBJECTS);
-            } else {
-                return eventConverter.convert(o).to(LIST_OF_OBJECTS);
-            }
+            return flatten(o, o instanceof Set ? new LinkedHashSet<>() : new ArrayList<>(),
+            		EventConverter::fillCollection);
         }
 
         // As with collections we remap nested maps to clean up any
         // undesirable types in the keys or values
         if (o instanceof Map) {
         	if(_log.isTraceEnabled()) {
-        		_log.trace("The map {} will be processed to remap the contained objects.", o);
+        		_log.trace("The map of type {} will be processed to remap the contained objects.", sourceClass);
         	}
-            return eventConverter.convert(o).to(MAP_OF_OBJECT_TO_OBJECT);
+            return flatten(o, new LinkedHashMap<>(), EventConverter::fillMap);
         }
 
         if (sourceClass.isArray()) {
         	if(_log.isTraceEnabled()) {
-        		_log.trace("The array {} will be processed to remap the contained objects.", o);
+        		_log.trace("The array of type {} will be processed to remap the contained objects.", sourceClass);
         	}
             int depth = 1;
             Class<?> arrayComponentType = sourceClass.getComponentType();
@@ -182,32 +183,138 @@ public class EventConverter {
             }
             if (safeClasses.contains(actualComponentType) || actualComponentType.isPrimitive()) {
             	if(_log.isTraceEnabled()) {
-            		_log.trace("The array {} does not need conversion.", o);
+            		_log.trace("The array of type {} does not need conversion.", sourceClass);
             	}
                 return o;
             } else if (actualComponentType.isEnum()) {
             	if(_log.isTraceEnabled()) {
-            		_log.trace("The array {} will use String values.", o);
+            		_log.trace("The array of type {} will use String values.", sourceClass);
             	}
                 // This becomes an n dimensional String array
                 Class<?> stringArrayType = Array.newInstance(String.class, new int[depth]).getClass();
                 return eventConverter.convert(o).to(stringArrayType);
             } else {
             	if(_log.isTraceEnabled()) {
-            		_log.trace("The array {} is complex and will be treated as a list.", o);
+            		_log.trace("The array of type {} is complex and its elements will be remapped.", sourceClass);
             	}
-                // This is an array of something complicated, recursively turn it into a
-                // list of something, then make it into an array of the right type
-                List<Object> oList = eventConverter.convert(o).to(LIST_OF_OBJECTS);
-                return oList.toArray((Object[]) Array.newInstance(arrayComponentType, 0));
+                // This is an array of something complicated, recursively remap the
+                // elements into an array of the right type
+                return flatten(o, Array.newInstance(arrayComponentType, Array.getLength(o)),
+                		EventConverter::fillArray);
             }
         }
 
         if(_log.isTraceEnabled()) {
-    		_log.trace("The object {} will be treated as a DTO.", o);
+    		_log.trace("The object of type {} will be treated as a DTO.", sourceClass);
     	}
         // If we get here then treat the type as a DTO
-        return eventConverter.convert(o).sourceAsDTO().to(MAP_WITH_STRING_KEYS);
+        return flatten(o, new LinkedHashMap<String, Object>(), EventConverter::fillDto);
+    }
+
+    /**
+     * The state of one flattening operation on the current thread
+     */
+    private static final class FlatteningContext {
+        // Maps each source object seen so far to the result built for it
+        final Map<Object, Visit> visits = new IdentityHashMap<>();
+        // Nested conversions use the same context as the outermost one
+        int depth;
+        // Set if an object was reached again while it was still being flattened
+        boolean cyclic;
+    }
+
+    private static final class Visit {
+        final Object result;
+        boolean inProgress = true;
+
+        Visit(Object result) {
+            this.result = result;
+        }
+    }
+
+    @FunctionalInterface
+    private interface Filler {
+        void fill(Object source, Object result);
+    }
+
+    private static final ThreadLocal<FlatteningContext> flattening = new ThreadLocal<>();
+
+    private static FlatteningContext enterFlattening() {
+        FlatteningContext context = flattening.get();
+        if (context == null) {
+            context = new FlatteningContext();
+            flattening.set(context);
+        }
+        context.depth++;
+        return context;
+    }
+
+    private static void exitFlattening(FlatteningContext context) {
+        if (--context.depth == 0) {
+            flattening.remove();
+        }
+    }
+
+    /**
+     * Flatten a source object into the (empty) result container. The result is
+     * registered before it is filled, so that if the source refers back to itself
+     * the same result is used again, and the flattened form has the same shape.
+     */
+    private static Object flatten(Object source, Object result, Filler filler) {
+        FlatteningContext context = enterFlattening();
+        try {
+            Visit visit = context.visits.get(source);
+            if (visit != null) {
+                if (visit.inProgress) {
+                    context.cyclic = true;
+                }
+                return visit.result;
+            }
+            visit = new Visit(result);
+            context.visits.put(source, visit);
+            filler.fill(source, result);
+            visit.inProgress = false;
+            return result;
+        } finally {
+            exitFlattening(context);
+        }
+    }
+
+    private static Object flattenValue(Object value) {
+        return value == null ? null : eventConverter.convert(value).to(Object.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void fillCollection(Object source, Object result) {
+        Collection<Object> target = (Collection<Object>) result;
+        for (Object element : (Collection<?>) source) {
+            target.add(flattenValue(element));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void fillMap(Object source, Object result) {
+        Map<Object, Object> target = (Map<Object, Object>) result;
+        for (Map.Entry<?, ?> entry : ((Map<?, ?>) source).entrySet()) {
+            target.put(flattenValue(entry.getKey()), flattenValue(entry.getValue()));
+        }
+    }
+
+    private static void fillArray(Object source, Object result) {
+        Object[] target = (Object[]) result;
+        Object[] elements = (Object[]) source;
+        for (int i = 0; i < elements.length; i++) {
+            target[i] = flattenValue(elements[i]);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void fillDto(Object source, Object result) {
+        Map<String, Object> target = (Map<String, Object>) result;
+        Map<String, Object> fields = shallowConverter.convert(source).sourceAsDTO().to(MAP_WITH_STRING_KEYS);
+        for (Map.Entry<String, Object> field : fields.entrySet()) {
+            target.put(field.getKey(), flattenValue(field.getValue()));
+        }
     }
 
     static Object attemptRecovery(Object o, Type target) {
@@ -216,14 +323,15 @@ public class EventConverter {
 
             if (errors.contains(o)) {
             	if(_log.isWarnEnabled()) {
-            		_log.warn("The map {} repeatedly failed conversion to type {}. This event cannot be converted", o, target);
+            		// The map may be cyclic, so don't use its toString
+            		_log.warn("A map of type {} repeatedly failed conversion to type {}. This event cannot be converted", o.getClass(), target);
             	}
                 return ConverterFunction.CANNOT_HANDLE;
             }
 
             try {
             	if(_log.isWarnEnabled()) {
-            		_log.warn("The map {} failed conversion to type {}. Convertsion will be reattempted treating the target as a DTO", o, target);
+            		_log.warn("A map of type {} failed conversion to type {}. Conversion will be reattempted treating the target as a DTO", o.getClass(), target);
             	}
                 errors.add(o);
                 return eventConverter.convert(o).targetAsDTO().to(target);
@@ -234,10 +342,34 @@ public class EventConverter {
         return ConverterFunction.CANNOT_HANDLE;
     }
 
+    @SuppressWarnings("rawtypes")
+    private static final AtomicReferenceFieldUpdater<EventConverter, Promise> FLATTENED = AtomicReferenceFieldUpdater
+            .newUpdater(EventConverter.class, Promise.class, "flattened");
+
+    /**
+     * The flattened form of an event, and whether it contains a cycle
+     */
+    private static final class Flattened {
+        final Map<String, Object> data;
+        final boolean cyclic;
+
+        Flattened(Map<String, Object> data, boolean cyclic) {
+            this.data = data;
+            this.cyclic = cyclic;
+        }
+    }
+
     private final Object originalEvent;
     private final CustomEventConverter custom;
 
-    private Map<String, Object> untypedEventDataForFiltering;
+    // Resolved by the first thread that needs the flattened event, so that an event
+    // which cannot be flattened fails once rather than once per handler. The field
+    // has to be volatile for the updater.
+    private volatile Promise<Flattened> flattened;
+
+    // Only used for typed conversions, which are all made by the delivery thread. A
+    // stale value only costs another failed attempt.
+    private boolean typedConversionOverflowed;
 
     private EventConverter(Object event, CustomEventConverter custom) {
         this.originalEvent = event;
@@ -247,7 +379,7 @@ public class EventConverter {
     private EventConverter(Map<String, Object> untypedEvent, CustomEventConverter custom) {
         this.originalEvent = untypedEvent;
         this.custom = custom;
-        this.untypedEventDataForFiltering = untypedEvent;
+        this.flattened = Promises.resolved(new Flattened(untypedEvent, false));
     }
 
     public static EventConverter forTypedEvent(Object event, CustomEventConverter custom) {
@@ -259,41 +391,123 @@ public class EventConverter {
     }
 
     public boolean applyFilter(Filter f) {
-        Map<String, ?> toTest;
-        if (untypedEventDataForFiltering == null) {
-            toTest = toUntypedEvent();
-        } else {
-            toTest = untypedEventDataForFiltering;
-        }
-
-        return f.matches(toTest);
+        Map<String, ?> toTest = tryUntypedEvent();
+        // A filter cannot match an event with no untyped form
+        return toTest != null && f.matches(toTest);
     }
 
+    /**
+     * @return The untyped form of this event. If the event contains a cycle then
+     *         the Maps, Lists and Sets of the result do too.
+     * @throws ConversionException if the event cannot be converted. The same
+     *         exception is thrown each time, as the conversion is not repeated.
+     */
     public Map<String, Object> toUntypedEvent() {
-        if (untypedEventDataForFiltering == null) {
-        	if(custom != null) {
-        		if(_log.isDebugEnabled()) {
-        			_log.debug("Using custom converter to convert {} to untyped data", originalEvent);
-        		}
-        		untypedEventDataForFiltering = custom.toUntypedEvent(originalEvent);
-        		if(untypedEventDataForFiltering == null) {
-        			if(_log.isDebugEnabled()) {
-        				_log.debug("Custom event converter could not convert event {}. Falling back to built-in conversion",
-        						originalEvent);
-        			}
-        			untypedEventDataForFiltering = eventConverter.convert(originalEvent).sourceAsDTO().to(MAP_WITH_STRING_KEYS);
-        		} else {
-        			return untypedEventDataForFiltering;
-        		}
-        	} else {
-        		if(_log.isTraceEnabled()) {
-        			_log.trace("Converting {} to untyped data", originalEvent);
-        		}
-        		untypedEventDataForFiltering = eventConverter.convert(originalEvent).sourceAsDTO().to(MAP_WITH_STRING_KEYS);
-        	}
-        	
+        Promise<Flattened> promise = flattened;
+        if (promise == null) {
+            promise = flatten();
         }
-        return untypedEventDataForFiltering;
+        try {
+            return promise.getValue().data;
+        } catch (InvocationTargetException ite) {
+            Throwable cause = ite.getCause();
+            throw cause instanceof ConversionException ? (ConversionException) cause
+                    : new ConversionException("Unable to convert an event of type " + originalEvent.getClass().getName(), cause);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new ConversionException("Interrupted while converting an event of type " + originalEvent.getClass().getName(), ie);
+        }
+    }
+
+    /**
+     * @return The untyped form of this event, or null if it cannot be converted.
+     *         The failure is logged by the first attempt, so callers need not.
+     */
+    Map<String, Object> tryUntypedEvent() {
+        try {
+            return toUntypedEvent();
+        } catch (ConversionException ce) {
+            return null;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Promise<Flattened> flatten() {
+        Deferred<Flattened> deferred = new Deferred<>();
+        if (!FLATTENED.compareAndSet(this, null, deferred.getPromise())) {
+            // Another thread is converting the event, or has finished
+            return (Promise<Flattened>) FLATTENED.get(this);
+        }
+
+        try {
+            deferred.resolve(flattenOriginalEvent());
+        } catch (Throwable t) {
+            if (t instanceof Error && !(t instanceof StackOverflowError)) {
+                // Don't leave other threads waiting for a result that will never arrive
+                deferred.fail(t);
+                throw (Error) t;
+            }
+            Class<?> eventType = originalEvent.getClass();
+            // The event may be cyclic, so don't use its toString
+            _log.warn("The event of type {} cannot be converted to its untyped form. It will not be delivered to untyped handlers, "
+                    + "or be matched by event filters or the event monitor.", eventType.getName(), t);
+            deferred.fail(new ConversionException("Unable to convert an event of type " + eventType.getName() + " to its untyped form", t));
+        }
+        return deferred.getPromise();
+    }
+
+    private Flattened flattenOriginalEvent() {
+        if (custom != null) {
+            if(_log.isDebugEnabled()) {
+                _log.debug("Using custom converter to convert an event of type {} to untyped data", originalEvent.getClass());
+            }
+            Map<String, Object> untyped = custom.toUntypedEvent(originalEvent);
+            if (untyped != null) {
+                return new Flattened(untyped, false);
+            }
+            if(_log.isDebugEnabled()) {
+                _log.debug("Custom event converter could not convert an event of type {}. Falling back to built-in conversion",
+                        originalEvent.getClass());
+            }
+        } else if(_log.isTraceEnabled()) {
+            _log.trace("Converting an event of type {} to untyped data", originalEvent.getClass());
+        }
+
+        // The context is shared with the nested conversions, and tells us about cycles
+        FlatteningContext context = enterFlattening();
+        try {
+            Object result = eventConverter.convert(originalEvent).to(Object.class);
+            if (!(result instanceof Map)) {
+                throw new ConversionException("An event of type " + originalEvent.getClass().getName() + " cannot be converted to a Map");
+            }
+            return new Flattened(withStringKeys((Map<?, ?>) result), context.cyclic);
+        } finally {
+            exitFlattening(context);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> withStringKeys(Map<?, ?> map) {
+        if (map.keySet().stream().allMatch(String.class::isInstance)) {
+            return (Map<String, Object>) map;
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            result.put(eventConverter.convert(entry.getKey()).to(String.class), entry.getValue());
+        }
+        return result;
+    }
+
+    private boolean isKnownCyclic() {
+        Promise<Flattened> promise = flattened;
+        if (promise == null || !promise.isDone()) {
+            return false;
+        }
+        try {
+            return promise.getValue().cyclic;
+        } catch (InvocationTargetException | InterruptedException e) {
+            return false;
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -306,13 +520,14 @@ public class EventConverter {
 			}
 		} else if (rawType.isInstance(originalEvent) && rawType == genericTarget) {
 			if (_log.isDebugEnabled()) {
-				_log.debug("No need to convert {} to {} as it is already an instance", originalEvent, rawType);
+				_log.debug("No need to convert an event of type {} to {} as it is already an instance", originalEvent.getClass(), rawType);
 			}
+			// This is also what keeps any cycles in the event intact
 			return (T) originalEvent;
 		}
 		if (custom != null) {
 			if (_log.isDebugEnabled()) {
-				_log.debug("Using custom converter to convert {} to {}", originalEvent, genericTarget);
+				_log.debug("Using custom converter to convert an event of type {} to {}", originalEvent.getClass(), genericTarget);
 			}
 			Object result = custom.toTypedEvent(originalEvent, typeData);
 			if (result != null) {
@@ -320,16 +535,31 @@ public class EventConverter {
 			}
 			if (_log.isDebugEnabled()) {
 				_log.debug(
-						"Custom event converter could not convert event {} to {}. Falling back to built-in conversion",
-						originalEvent, genericTarget);
+						"Custom event converter could not convert an event of type {} to {}. Falling back to built-in conversion",
+						originalEvent.getClass(), genericTarget);
 			}
-			return eventConverter.convert(originalEvent).targetAsDTO().to(genericTarget);
-		} else {
-			if (_log.isDebugEnabled()) {
-				_log.debug("Converting {} to {}", originalEvent, genericTarget);
-			}
-			return eventConverter.convert(originalEvent).targetAsDTO().to(genericTarget);
+		} else if (_log.isDebugEnabled()) {
+			_log.debug("Converting an event of type {} to {}", originalEvent.getClass(), genericTarget);
 		}
+		return convertToTyped(genericTarget);
+	}
+
+	private <T> T convertToTyped(Type genericTarget) {
+		if (typedConversionOverflowed || isKnownCyclic()) {
+			throw cyclicConversion(genericTarget, null);
+		}
+		try {
+			return eventConverter.convert(originalEvent).targetAsDTO().to(genericTarget);
+		} catch (StackOverflowError so) {
+			// The converter has no handling for cycles when it builds DTOs
+			typedConversionOverflowed = true;
+			throw cyclicConversion(genericTarget, so);
+		}
+	}
+
+	private IllegalArgumentException cyclicConversion(Type genericTarget, Throwable cause) {
+		return new IllegalArgumentException("An event of type " + originalEvent.getClass().getName()
+				+ " contains a cycle and cannot be converted to " + genericTarget.getTypeName(), cause);
 	}
 
 }
