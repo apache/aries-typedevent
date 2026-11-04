@@ -39,7 +39,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -143,7 +143,8 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
      */
     private final Map<Long, UnhandledEventHandler> knownUnhandledHandlers = new HashMap<>();
 
-    private final BlockingQueue<EventTask> queue = new LinkedBlockingQueue<>();
+    // Lock free, so cheaper than a LinkedBlockingQueue when several threads publish
+    private final BlockingQueue<EventTask> queue = new LinkedTransferQueue<>();
 
     /**
      * 
@@ -566,10 +567,9 @@ public class TypedEventBusImpl implements TypedEventBus, AriesTypedEvents {
                 				topic, convertibleEventData)));
             }
             // This occurs inside the lock to ensure history replay doesn't miss events
-            queue.add(new MonitorEventTask(topic, convertibleEventData, monitorImpl));
+            // The tasks for one event are queued together, which costs one queue operation instead of one each
+            queue.add(new EventBatchTask(new MonitorEventTask(topic, convertibleEventData, monitorImpl), deliveryTasks));
         }
-
-        queue.addAll(deliveryTasks);
     }
 
 	@SafeVarargs
