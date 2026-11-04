@@ -95,6 +95,24 @@ public class TypedEventMonitorImpl implements TypedEventMonitor {
         monitoringWorker.shutdown();
     }
 
+    /**
+     * Whether an event on the topic would be kept in the history or sent to a
+     * connected stream. This lets the caller avoid flattening the event when
+     * nobody would see it. The answer can be out of date by the time
+     * {@link #event(String, Map)} is called, which makes the same checks again.
+     */
+    boolean isMonitored(String topic) throws InterruptedException {
+        if (source.isConnected()) {
+            return true;
+        }
+        lock.readLock().lockInterruptibly();
+        try {
+            return doGetEffectiveHistoryStorage(topic).getMaximum() > 0;
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
     void event(String topic, Map<String, Object> eventData) throws InterruptedException {
 
     	MonitorEvent me = null;

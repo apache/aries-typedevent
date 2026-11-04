@@ -42,6 +42,10 @@ class MonitorEventTask extends EventTask {
     	if(_log.isTraceEnabled()) {
     		_log.trace("Distributing event to the event monitor");
     	}
+    	// Flattening the event is the expensive part, so only do it if someone will see the result
+    	if (!monitorImpl.isMonitored(eventType)) {
+    		return;
+    	}
     	Map<String, Object> untyped = eventData.tryUntypedEvent();
     	if (untyped == null) {
     		// Already logged when the conversion failed
