@@ -17,6 +17,7 @@
 
 package org.apache.aries.typedevent.bus.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -30,11 +31,17 @@ import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_TOPICS
 import static org.osgi.service.typedevent.TypedEventConstants.TYPED_EVENT_TYPE;
 import static org.osgi.util.converter.Converters.standardConverter;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -968,6 +975,68 @@ public class TypedEventBusImplTest {
         assertTrue(semA.tryAcquire(1, TimeUnit.SECONDS));
         Mockito.verify(handlerA).notify(Mockito.eq(TEST_EVENT_TOPIC),
                 Mockito.argThat(isTestEventWithMessage("second")));
+    }
+
+    /**
+     * Events published by one thread must reach every handler in the order they
+     * were published, however many threads are publishing
+     */
+    @Test
+    public void testEventsFromOneThreadAreDeliveredInOrderToEveryHandler() throws Exception {
+
+        int publishers = 4;
+        int eventsEach = 500;
+        int handlers = 3;
+
+        CountDownLatch delivered = new CountDownLatch(publishers * eventsEach * handlers);
+        // For each handler the last event number seen from each publisher
+        List<Map<String, Integer>> lastSeen = new ArrayList<>();
+        AtomicInteger outOfOrder = new AtomicInteger();
+
+        for (int h = 0; h < handlers; h++) {
+            Map<String, Integer> last = new HashMap<>();
+            lastSeen.add(last);
+
+            Map<String, Object> serviceProperties = new HashMap<>();
+            serviceProperties.put(TYPED_EVENT_TOPICS, TEST_EVENT_TOPIC);
+            serviceProperties.put(TYPED_EVENT_TYPE, TestEvent.class.getName());
+            serviceProperties.put(SERVICE_ID, 100L + h);
+
+            // All handlers are called by the delivery thread, so the map needs no locking
+            impl.addTypedEventHandler(registeringBundle, (TypedEventHandler<Object>) (topic, event) -> {
+                String[] parts = ((TestEvent) event).message.split(":");
+                int number = Integer.parseInt(parts[1]);
+                Integer previous = last.put(parts[0], number);
+                if (previous != null && previous >= number) {
+                    outOfOrder.incrementAndGet();
+                }
+                delivered.countDown();
+            }, serviceProperties);
+        }
+
+        ExecutorService executor = Executors.newFixedThreadPool(publishers);
+        try {
+            for (int p = 0; p < publishers; p++) {
+                String name = "publisher" + p;
+                executor.submit(() -> {
+                    for (int i = 0; i < eventsEach; i++) {
+                        TestEvent event = new TestEvent();
+                        event.message = name + ":" + i;
+                        impl.deliver(event);
+                    }
+                });
+            }
+
+            assertTrue(delivered.await(30, TimeUnit.SECONDS));
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertEquals(0, outOfOrder.get());
+        for (Map<String, Integer> last : lastSeen) {
+            assertEquals(publishers, last.size());
+            last.values().forEach(n -> assertEquals(eventsEach - 1, n));
+        }
     }
 
 }
