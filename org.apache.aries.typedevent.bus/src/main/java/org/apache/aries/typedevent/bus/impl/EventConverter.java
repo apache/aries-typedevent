@@ -21,7 +21,9 @@ import static java.lang.ThreadLocal.withInitial;
 import static java.util.Collections.newSetFromMap;
 
 import java.lang.reflect.Array;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 import java.time.Duration;
 import java.time.Instant;
@@ -42,6 +44,7 @@ import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -308,12 +311,60 @@ public class EventConverter {
         }
     }
 
+    /**
+     * The public instance fields of a DTO class, whose names are also their keys
+     * in the flattened form. The converter reflects over the class again for every
+     * event, which is much slower than reading the fields.
+     * <p>
+     * The value is null for a class whose keys the converter has to work out,
+     * because a field name contains '_' or '$' (which the converter mangles), the
+     * class has a PREFIX_ constant, or two fields have the same name.
+     * <p>
+     * The values are JDK types only, so that the cache does not keep the class
+     * loader of this bundle alive through the event classes of other bundles.
+     */
+    private static final ClassValue<Field[]> plainDtoFields = new ClassValue<Field[]>() {
+        @Override
+        protected Field[] computeValue(Class<?> type) {
+            Set<String> names = new HashSet<>();
+            List<Field> fields = new ArrayList<>();
+            for (Field f : type.getFields()) {
+                String name = f.getName();
+                if ("PREFIX_".equals(name)) {
+                    return null;
+                }
+                if (Modifier.isStatic(f.getModifiers())) {
+                    continue;
+                }
+                if (name.indexOf('_') >= 0 || name.indexOf('$') >= 0 || !names.add(name)) {
+                    return null;
+                }
+                fields.add(f);
+            }
+            return fields.toArray(new Field[0]);
+        }
+    };
+
     @SuppressWarnings("unchecked")
     private static void fillDto(Object source, Object result) {
         Map<String, Object> target = (Map<String, Object>) result;
-        Map<String, Object> fields = shallowConverter.convert(source).sourceAsDTO().to(MAP_WITH_STRING_KEYS);
-        for (Map.Entry<String, Object> field : fields.entrySet()) {
-            target.put(field.getKey(), flattenValue(field.getValue()));
+        Field[] fields = plainDtoFields.get(source.getClass());
+        if (fields == null) {
+            Map<String, Object> converted = shallowConverter.convert(source).sourceAsDTO().to(MAP_WITH_STRING_KEYS);
+            for (Map.Entry<String, Object> field : converted.entrySet()) {
+                target.put(field.getKey(), flattenValue(field.getValue()));
+            }
+            return;
+        }
+        for (Field field : fields) {
+            Object value;
+            try {
+                value = field.get(source);
+            } catch (Exception e) {
+                // The converter also ignores a field that cannot be read
+                continue;
+            }
+            target.put(field.getName(), flattenValue(value));
         }
     }
 
